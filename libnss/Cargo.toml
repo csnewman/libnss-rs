@@ -1,8 +1,14 @@
 [package]
 name = "libnss"
+description = "Rust bindings for creating libnss modules"
 version = "0.1.0"
 authors = ["Chandler Newman <chandler2newman@hotmail.co.uk>"]
 edition = "2018"
+readme = "README.md"
+repository = "https://github.com/csnewman/libnss-rs"
+keywords = ["libnss", "binding", "module", "nss"]
+categories = ["api-bindings", "authentication", "database", "os::unix-apis"]
+license = "LGPL 3.0"
 
 [lib]
 name = "libnss"
