@@ -1,0 +1,12 @@
+[package]
+name = "example-hardcoded-user"
+version = "0.1.0"
+authors = ["Chandler Newman <chandler2newman@hotmail.co.uk>"]
+edition = "2018"
+
+[lib]
+name = "nss_hardcoded"
+crate-type = [ "cdylib" ]
+
+[dependencies]
+libnss-rs = { path = "../libnss-rs" }

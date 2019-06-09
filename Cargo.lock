@@ -1,0 +1,11 @@
+[[package]]
+name = "example-hardcoded-user"
+version = "0.1.0"
+dependencies = [
+ "libnss-rs 0.1.0",
+]
+
+[[package]]
+name = "libnss-rs"
+version = "0.1.0"
+

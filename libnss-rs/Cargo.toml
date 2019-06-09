@@ -1,0 +1,10 @@
+[package]
+name = "libnss-rs"
+version = "0.1.0"
+authors = ["Chandler Newman <chandler2newman@hotmail.co.uk>"]
+edition = "2018"
+
+[lib]
+name = "libnss_rs"
+
+[dependencies]
