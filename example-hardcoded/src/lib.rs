@@ -5,6 +5,7 @@ extern crate lazy_static;
 extern crate libnss;
 
 use libnss::passwd::{PasswdHooks, Passwd};
+use libnss::group::{GroupHooks, Group};
 
 struct HardcodedPasswd;
 libnss_passwd_hooks!(hardcoded, HardcodedPasswd);
@@ -52,6 +53,49 @@ impl PasswdHooks for HardcodedPasswd {
                 gecos: "TestAccount".to_string(),
                 dir: "/home/test".to_string(),
                 shell: "/bin/bash".to_string(),
+            });
+        }
+
+        None
+    }
+}
+
+
+struct HardcodedGroup;
+libnss_group_hooks!(hardcoded, HardcodedGroup);
+
+impl GroupHooks for HardcodedGroup {
+    fn get_all_entries() -> Vec<Group> {
+        vec![
+            Group {
+                name: "test".to_string(),
+                passwd: "x".to_string(),
+                gid: 1005,
+                members: vec!["someone".to_string(), "test".to_string()],
+            }
+        ]
+    }
+
+    fn get_entry_by_gid(gid: libc::gid_t) -> Option<Group> {
+        if gid == 1005 {
+            return Some(Group {
+                name: "test".to_string(),
+                passwd: "x".to_string(),
+                gid: 1005,
+                members: vec!["someone".to_string(), "test".to_string()],
+            });
+        }
+
+        None
+    }
+
+    fn get_entry_by_name(name: String) -> Option<Group> {
+        if name == "test" {
+            return Some(Group {
+                name: "test".to_string(),
+                passwd: "x".to_string(),
+                gid: 1005,
+                members: vec!["someone".to_string(), "test".to_string()],
             });
         }
 
