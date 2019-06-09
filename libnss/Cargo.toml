@@ -8,7 +8,7 @@ readme = "README.md"
 repository = "https://github.com/csnewman/libnss-rs"
 keywords = ["libnss", "binding", "module", "nss"]
 categories = ["api-bindings", "authentication", "database", "os::unix-apis"]
-license = "LGPL 3.0"
+license = "LGPL-3.0"
 
 [lib]
 name = "libnss"
