@@ -95,7 +95,6 @@ macro_rules! libnss_passwd_hooks {
                 NssStatus::Success.to_c()
             }
 
-
             #[no_mangle]
             extern "C" fn [<_nss_ $mod_ident _endpwent>]() -> libc::c_int {
                 let mut iter: MutexGuard<PasswdIterator> = [<PASSWD_ $mod_ident _ITERATOR>].lock().unwrap();
