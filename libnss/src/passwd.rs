@@ -11,6 +11,18 @@ pub struct Passwd {
     pub shell: String,
 }
 
+impl Passwd {
+    pub unsafe fn to_c_passwd(self, pwbuf: *mut CPasswd, buffer: &mut CBuffer) {
+        (*pwbuf).name = buffer.write_str(self.name);
+        (*pwbuf).passwd = buffer.write_str(self.passwd);
+        (*pwbuf).uid = self.uid;
+        (*pwbuf).gid = self.gid;
+        (*pwbuf).gecos = buffer.write_str(self.gecos);
+        (*pwbuf).dir = buffer.write_str(self.dir);
+        (*pwbuf).shell = buffer.write_str(self.shell);
+    }
+}
+
 pub trait PasswdHooks {
     fn get_all_entries() -> Vec<Passwd>;
 
@@ -55,18 +67,6 @@ impl PasswdIterator {
 
     pub fn close(&mut self) {
         self.items = None;
-    }
-}
-
-impl Passwd {
-    pub unsafe fn to_c_passwd(self, pwbuf: *mut CPasswd, buffer: &mut CBuffer) {
-        (*pwbuf).name = buffer.write_str(self.name);
-        (*pwbuf).passwd = buffer.write_str(self.passwd);
-        (*pwbuf).uid = self.uid;
-        (*pwbuf).gid = self.gid;
-        (*pwbuf).gecos = buffer.write_str(self.gecos);
-        (*pwbuf).dir = buffer.write_str(self.dir);
-        (*pwbuf).shell = buffer.write_str(self.shell);
     }
 }
 
