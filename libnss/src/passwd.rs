@@ -22,13 +22,13 @@ pub trait PasswdHooks {
 #[repr(C)]
 #[allow(missing_copy_implementations)]
 pub struct CPasswd {
-    name: *mut libc::c_char,
-    passwd: *mut libc::c_char,
-    uid: libc::uid_t,
-    gid: libc::gid_t,
-    gecos: *mut libc::c_char,
-    dir: *mut libc::c_char,
-    shell: *mut libc::c_char,
+    pub name: *mut libc::c_char,
+    pub passwd: *mut libc::c_char,
+    pub uid: libc::uid_t,
+    pub gid: libc::gid_t,
+    pub gecos: *mut libc::c_char,
+    pub dir: *mut libc::c_char,
+    pub shell: *mut libc::c_char,
 }
 
 pub struct PasswdIterator {
