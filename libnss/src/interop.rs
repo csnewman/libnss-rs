@@ -66,6 +66,22 @@ impl CBuffer {
         str_start as *mut libc::c_char
     }
 
+    pub unsafe fn write_strs(&mut self, strings: &[String]) -> *mut libc::c_char {
+        // Capture start address
+        let str_start = self.pos;
+        // Write strings
+        for s in strings {
+            self.write_str(s.clone());
+        }
+        // Write null to end
+        libc::memset(self.pos, 0, 1);
+        // Update end address
+        self.pos.offset(1);
+        self.free -= 1;
+
+        str_start as *mut libc::c_char
+    }
+
     pub unsafe fn reserve(&mut self, len: isize) -> *mut libc::c_char {
         let start = self.pos;
 
