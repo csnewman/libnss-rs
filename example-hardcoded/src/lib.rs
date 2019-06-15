@@ -7,6 +7,7 @@ extern crate libnss;
 use libnss::passwd::{PasswdHooks, Passwd};
 use libnss::group::{GroupHooks, Group};
 use libnss::shadow::{ShadowHooks, Shadow};
+use libnss::host::{HostHooks, Host};
 
 struct HardcodedPasswd;
 libnss_passwd_hooks!(hardcoded, HardcodedPasswd);
@@ -141,5 +142,24 @@ impl ShadowHooks for HardcodedShadow {
         }
 
         None
+    }
+}
+
+use std::net::IpAddr;
+
+struct HardcodedHost;
+libnss_host_hooks!(hardcoded, HardcodedHost);
+
+impl HostHooks for HardcodedHost {
+    fn get_all_entries() -> Vec<Host> {
+        unimplemented!()
+    }
+
+    fn get_host_by_name(_name: &str) -> Option<Host> {
+        unimplemented!()
+    }
+
+    fn get_host_by_addr(_addr: IpAddr) -> Option<Host> {
+        unimplemented!()
     }
 }
