@@ -53,7 +53,6 @@ impl Host {
                     );
 
                     *array_pos = ptr;
-
                     array_pos = array_pos.offset(1);
                 }
             }
@@ -69,7 +68,6 @@ impl Host {
                     );
 
                     *array_pos = ptr;
-
                     array_pos = array_pos.offset(1);
                 }
             }
@@ -159,7 +157,6 @@ macro_rules! libnss_host_hooks {
             extern "C" fn [<_nss_ $mod_ident _endhostent>]() -> libc::c_int {
                 let mut iter: MutexGuard<HostIterator> = [<HOST_ $mod_ident _ITERATOR>].lock().unwrap();
                 iter.close();
-
                 NssStatus::Success.to_c()
             }
 
