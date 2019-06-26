@@ -1,9 +1,7 @@
-
 use crate::interop::CBuffer;
+use std::collections::VecDeque;
 use std::mem;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use std::collections::VecDeque;
-
 
 pub struct Host {
     pub name: String,
@@ -29,16 +27,17 @@ impl Host {
                 (*hostent).h_length = 4;
 
                 (4, addrs.len())
-            },
+            }
             Addresses::V6(addrs) => {
                 (*hostent).h_addrtype = libc::AF_INET6;
                 (*hostent).h_length = 16;
 
                 (16, addrs.len())
-            },
+            }
         };
 
-        let mut array_pos = buffer.reserve(ptr_size * (count as isize) + 1)  as *mut *mut libc::c_char;
+        let mut array_pos =
+            buffer.reserve(ptr_size * (count as isize) + 1) as *mut *mut libc::c_char;
         (*hostent).h_addr_list = array_pos;
 
         match &self.addresses {
@@ -47,20 +46,28 @@ impl Host {
                     let ptr = buffer.reserve(addr_len);
 
                     let o = a.octets();
-                    libc::memcpy(ptr as *mut libc::c_void, o.as_ptr() as *mut libc::c_void, addr_len as usize);
-                    
+                    libc::memcpy(
+                        ptr as *mut libc::c_void,
+                        o.as_ptr() as *mut libc::c_void,
+                        addr_len as usize,
+                    );
+
                     *array_pos = ptr;
 
                     array_pos = array_pos.offset(1);
                 }
-            },
+            }
             Addresses::V6(addrs) => {
                 for a in addrs {
                     let ptr = buffer.reserve(addr_len);
 
                     let o = a.octets();
-                    libc::memcpy(ptr as *mut libc::c_void, o.as_ptr() as *mut libc::c_void, addr_len as usize);
-                    
+                    libc::memcpy(
+                        ptr as *mut libc::c_void,
+                        o.as_ptr() as *mut libc::c_void,
+                        addr_len as usize,
+                    );
+
                     *array_pos = ptr;
 
                     array_pos = array_pos.offset(1);
@@ -73,7 +80,6 @@ impl Host {
 
         // Set single / first address
         (*hostent).h_addr = *(*hostent).h_addr_list;
-        
     }
 }
 
@@ -104,9 +110,7 @@ pub struct HostIterator {
 
 impl HostIterator {
     pub fn new() -> Self {
-        HostIterator {
-            items: None,
-        }
+        HostIterator { items: None }
     }
 
     pub fn open(&mut self, items: Vec<Host>) {
@@ -116,7 +120,7 @@ impl HostIterator {
     pub fn next(&mut self) -> Option<Host> {
         match self.items {
             Some(ref mut val) => val.pop_front(),
-            None => panic!("Iterator not currently open")
+            None => panic!("Iterator not currently open"),
         }
     }
 
@@ -227,7 +231,7 @@ macro_rules! libnss_host_hooks {
                 }
             }
 
-  
+
         }
     }
 )}
