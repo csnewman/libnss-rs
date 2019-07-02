@@ -5,3 +5,4 @@ pub mod interop;
 pub mod passwd;
 pub mod group;
 pub mod shadow;
+pub mod host;
