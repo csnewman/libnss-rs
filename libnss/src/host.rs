@@ -196,7 +196,6 @@ macro_rules! libnss_host_hooks {
                     }
                 };
 
-
                 match super::$hooks_ident::get_host_by_addr(a) {
                     Some(val) => {
                         let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
@@ -227,7 +226,6 @@ macro_rules! libnss_host_hooks {
                     Err(_) => NssStatus::NotFound.to_c()
                 }
             }
-
 
         }
     }
