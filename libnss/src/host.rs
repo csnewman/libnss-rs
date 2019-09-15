@@ -174,7 +174,7 @@ macro_rules! libnss_host_hooks {
             }
 
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyaddr_r>](addr: *const libc::c_char, len: libc::size_t, format: libc::c_int, hostbuf: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, result: *mut *mut CHost, _errnop: *mut libc::c_int) -> libc::c_int {
+            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyaddr_r>](addr: *const libc::c_char, len: libc::size_t, format: libc::c_int, hostbuf: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, _errnop: *mut libc::c_int, _herrnop: *mut libc::c_int) -> libc::c_int {
                 // Convert address type
                 let a = match (len, format) {
                     (4, libc::AF_INET) => {
@@ -206,8 +206,8 @@ macro_rules! libnss_host_hooks {
             }
 
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname_r>](name_: *const libc::c_char, hostbuf: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, result: *mut *mut CHost, _errnop: *mut libc::c_int) -> libc::c_int {
-                let cstr = CStr::from_ptr(name_);
+            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname_r>](name: *const libc::c_char, hostbuf: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, _errnop: *mut libc::c_int, _herrnop: *mut libc::c_int) -> libc::c_int {
+                let cstr = CStr::from_ptr(name);
 
                 match str::from_utf8(cstr.to_bytes()) {
                     Ok(name) => match super::$hooks_ident::get_host_by_name(&name.to_string()) {
