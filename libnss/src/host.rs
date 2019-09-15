@@ -206,7 +206,14 @@ macro_rules! libnss_host_hooks {
             }
 
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname_r>](name: *const libc::c_char, hostbuf: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, _errnop: *mut libc::c_int, _herrnop: *mut libc::c_int) -> libc::c_int {
+            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname_r>](name: *const libc::c_char, hostbuf: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, errnop: *mut libc::c_int, herrnop: *mut libc::c_int) -> libc::c_int {
+                [<_nss_ $mod_ident _gethostbyname2_r>](name, libc::AF_UNSPEC, hostbuf, buf, buflen, errnop, herrnop)
+            }
+
+            // TODO: if `family` is specified but wrong family of addresses is returned, should be
+            // an error
+            #[no_mangle]
+            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname2_r>](name: *const libc::c_char, family: libc::c_int, hostbuf: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, _errnop: *mut libc::c_int, _herrnop: *mut libc::c_int) -> libc::c_int {
                 let cstr = CStr::from_ptr(name);
 
                 match str::from_utf8(cstr.to_bytes()) {
