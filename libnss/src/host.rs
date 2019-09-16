@@ -37,7 +37,7 @@ impl Host {
         };
 
         let mut array_pos =
-            buffer.reserve(ptr_size * (count as isize) + 1) as *mut *mut libc::c_char;
+            buffer.reserve(ptr_size * (count as isize + 1)) as *mut *mut libc::c_char;
         (*hostent).h_addr_list = array_pos;
 
         match &self.addresses {
@@ -53,7 +53,7 @@ impl Host {
                     );
 
                     *array_pos = ptr;
-                    array_pos = array_pos.offset(1);
+                    array_pos = array_pos.offset(ptr_size);
                 }
             }
             Addresses::V6(addrs) => {
@@ -68,7 +68,7 @@ impl Host {
                     );
 
                     *array_pos = ptr;
-                    array_pos = array_pos.offset(1);
+                    array_pos = array_pos.offset(ptr_size);
                 }
             }
         }
@@ -93,7 +93,7 @@ pub trait HostHooks {
 #[derive(Debug)]
 pub struct CHost {
     pub name: *mut libc::c_char,
-    pub h_aliases: *mut libc::c_char,
+    pub h_aliases: *mut *mut libc::c_char,
     pub h_addrtype: libc::c_int,
     pub h_length: libc::c_int,
     pub h_addr_list: *mut *mut libc::c_char,
