@@ -75,9 +75,6 @@ impl Host {
 
         // Write null termination
         libc::memset(array_pos as *mut libc::c_void, 0, 1);
-
-        // Set single / first address
-        (*hostent).h_addr = *(*hostent).h_addr_list;
     }
 }
 
@@ -93,13 +90,13 @@ pub trait HostHooks {
 /// https://ftp.gnu.org/old-gnu/Manuals/glibc-2.2.3/html_chapter/libc_16.html#SEC318
 #[repr(C)]
 #[allow(missing_copy_implementations)]
+#[derive(Debug)]
 pub struct CHost {
     pub name: *mut libc::c_char,
     pub h_aliases: *mut libc::c_char,
     pub h_addrtype: libc::c_int,
     pub h_length: libc::c_int,
     pub h_addr_list: *mut *mut libc::c_char,
-    pub h_addr: *mut libc::c_char,
 }
 
 pub struct HostIterator {
