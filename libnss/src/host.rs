@@ -158,7 +158,7 @@ macro_rules! libnss_host_hooks {
             }
 
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _gethostent_r>](hostbuf: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t,
+            unsafe extern "C" fn [<_nss_ $mod_ident _gethostent_r>](result: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t,
                                                                   _errnop: *mut libc::c_int) -> libc::c_int {
                 let mut iter: MutexGuard<HostIterator> = [<HOST_ $mod_ident _ITERATOR>].lock().unwrap();
                 match iter.next() {
@@ -167,14 +167,14 @@ macro_rules! libnss_host_hooks {
                         let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
                         buffer.clear();
 
-                        entry.to_c_hostent(hostbuf, &mut buffer);
+                        entry.to_c_hostent(result, &mut buffer);
                         NssStatus::Success.to_c()
                     }
                 }
             }
 
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyaddr_r>](addr: *const libc::c_char, len: libc::size_t, format: libc::c_int, hostbuf: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, _errnop: *mut libc::c_int, _herrnop: *mut libc::c_int) -> libc::c_int {
+            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyaddr_r>](addr: *const libc::c_char, len: libc::size_t, format: libc::c_int, result: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, _errnop: *mut libc::c_int, _herrnop: *mut libc::c_int) -> libc::c_int {
                 // Convert address type
                 let a = match (len, format) {
                     (4, libc::AF_INET) => {
@@ -198,7 +198,7 @@ macro_rules! libnss_host_hooks {
                         let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
                         buffer.clear();
 
-                        val.to_c_hostent(hostbuf, &mut buffer);
+                        val.to_c_hostent(result, &mut buffer);
                         NssStatus::Success.to_c()
                     },
                     None => NssStatus::NotFound.to_c()
@@ -206,14 +206,14 @@ macro_rules! libnss_host_hooks {
             }
 
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname_r>](name: *const libc::c_char, hostbuf: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, errnop: *mut libc::c_int, herrnop: *mut libc::c_int) -> libc::c_int {
-                [<_nss_ $mod_ident _gethostbyname2_r>](name, libc::AF_UNSPEC, hostbuf, buf, buflen, errnop, herrnop)
+            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname_r>](name: *const libc::c_char, result: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, errnop: *mut libc::c_int, herrnop: *mut libc::c_int) -> libc::c_int {
+                [<_nss_ $mod_ident _gethostbyname2_r>](name, libc::AF_UNSPEC, result, buf, buflen, errnop, herrnop)
             }
 
             // TODO: if `family` is specified but wrong family of addresses is returned, should be
             // an error
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname2_r>](name: *const libc::c_char, family: libc::c_int, hostbuf: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, _errnop: *mut libc::c_int, _herrnop: *mut libc::c_int) -> libc::c_int {
+            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname2_r>](name: *const libc::c_char, family: libc::c_int, result: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, _errnop: *mut libc::c_int, _herrnop: *mut libc::c_int) -> libc::c_int {
                 let cstr = CStr::from_ptr(name);
 
                 match str::from_utf8(cstr.to_bytes()) {
@@ -222,7 +222,7 @@ macro_rules! libnss_host_hooks {
                             let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
                             buffer.clear();
 
-                            val.to_c_hostent(hostbuf, &mut buffer);
+                            val.to_c_hostent(result, &mut buffer);
                             NssStatus::Success.to_c()
                         },
                         None => NssStatus::NotFound.to_c()
