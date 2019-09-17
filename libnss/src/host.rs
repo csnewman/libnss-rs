@@ -9,6 +9,13 @@ pub struct Host {
     pub addresses: Addresses,
 }
 
+#[derive(PartialEq)]
+pub enum AddressFamily {
+    IPv4,
+    IPv6,
+    Unspecified,
+}
+
 pub enum Addresses {
     V4(Vec<Ipv4Addr>),
     V6(Vec<Ipv6Addr>),
@@ -81,7 +88,7 @@ impl Host {
 pub trait HostHooks {
     fn get_all_entries() -> Vec<Host>;
 
-    fn get_host_by_name(name: &str) -> Option<Host>;
+    fn get_host_by_name(name: &str, family: AddressFamily) -> Option<Host>;
 
     fn get_host_by_addr(addr: IpAddr) -> Option<Host>;
 }
@@ -137,7 +144,7 @@ macro_rules! libnss_host_hooks {
             use std::sync::{Mutex, MutexGuard};
             use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
             use $crate::interop::{CBuffer, NssStatus};
-            use $crate::host::{CHost, HostHooks, HostIterator};
+            use $crate::host::{CHost, HostHooks, HostIterator, AddressFamily};
 
             lazy_static! {
             static ref [<HOST_ $mod_ident _ITERATOR>]: Mutex<HostIterator> = Mutex::new(HostIterator::new());
@@ -210,23 +217,37 @@ macro_rules! libnss_host_hooks {
                 [<_nss_ $mod_ident _gethostbyname2_r>](name, libc::AF_UNSPEC, result, buf, buflen, errnop, herrnop)
             }
 
-            // TODO: if `family` is specified but wrong family of addresses is returned, should be
-            // an error
             #[no_mangle]
             unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname2_r>](name: *const libc::c_char, family: libc::c_int, result: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, _errnop: *mut libc::c_int, _herrnop: *mut libc::c_int) -> libc::c_int {
                 let cstr = CStr::from_ptr(name);
 
                 match str::from_utf8(cstr.to_bytes()) {
-                    Ok(name) => match super::$hooks_ident::get_host_by_name(&name.to_string()) {
-                        Some(val) => {
-                            let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
-                            buffer.clear();
+                    Ok(name) => {
+                        let host = match family {
+                            libc::AF_INET => super::$hooks_ident::get_host_by_name(&name.to_string(), AddressFamily::IPv4),
+                            libc::AF_INET6 => super::$hooks_ident::get_host_by_name(&name.to_string(), AddressFamily::IPv6),
 
-                            val.to_c_hostent(result, &mut buffer);
-                            NssStatus::Success.to_c()
-                        },
-                        None => NssStatus::NotFound.to_c()
-                    },
+                            // If unspecified, we are probably being called from gethostbyname_r so
+                            // we will try IPv4 and if no results, then try IPv6
+                            libc::AF_UNSPEC => match super::$hooks_ident::get_host_by_name(&name.to_string(), AddressFamily::IPv4) {
+                                None => super::$hooks_ident::get_host_by_name(&name.to_string(), AddressFamily::IPv6),
+                                val => val,
+                            },
+                            _ => { return NssStatus::NotFound.to_c(); },
+                        };
+
+                        match host {
+                            Some(val) => {
+                                let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
+                                buffer.clear();
+
+                                val.to_c_hostent(result, &mut buffer);
+                                NssStatus::Success.to_c()
+                            },
+                            None => NssStatus::NotFound.to_c()
+                        }
+                    }
+
                     Err(_) => NssStatus::NotFound.to_c()
                 }
             }

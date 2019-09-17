@@ -7,7 +7,7 @@ extern crate libnss;
 use libnss::passwd::{PasswdHooks, Passwd};
 use libnss::group::{GroupHooks, Group};
 use libnss::shadow::{ShadowHooks, Shadow};
-use libnss::host::{Addresses, Host, HostHooks};
+use libnss::host::{AddressFamily, Addresses, Host, HostHooks};
 
 struct HardcodedPasswd;
 libnss_passwd_hooks!(hardcoded, HardcodedPasswd);
@@ -176,8 +176,8 @@ impl HostHooks for HardcodedHost {
         }
     }
 
-    fn get_host_by_name(name: &str) -> Option<Host> {
-        if name.ends_with(".example") {
+    fn get_host_by_name(name: &str, family: AddressFamily) -> Option<Host> {
+        if name.ends_with(".example") && family == AddressFamily::IPv4 {
             Some(Host {
                 name: name.to_string(),
                 addresses: Addresses::V4(vec![Ipv4Addr::new(177, 42, 42, 42)]),
