@@ -26,8 +26,6 @@ impl Host {
         (*hostent).name = buffer.write_str(self.name);
         (*hostent).h_aliases = buffer.write_strs(&self.aliases);
 
-        let ptr_size = mem::size_of::<*mut libc::c_char>() as isize;
-
         let (addr_len, count) = match &self.addresses {
             Addresses::V4(addrs) => {
                 (*hostent).h_addrtype = libc::AF_INET;
@@ -43,6 +41,7 @@ impl Host {
             }
         };
 
+        let ptr_size = mem::size_of::<*mut libc::c_char>() as isize;
         let mut array_pos =
             buffer.reserve(ptr_size * (count as isize + 1)) as *mut *mut libc::c_char;
         (*hostent).h_addr_list = array_pos;
@@ -60,7 +59,7 @@ impl Host {
                     );
 
                     *array_pos = ptr;
-                    array_pos = array_pos.offset(ptr_size);
+                    array_pos = array_pos.offset(1);
                 }
             }
             Addresses::V6(addrs) => {
@@ -75,7 +74,7 @@ impl Host {
                     );
 
                     *array_pos = ptr;
-                    array_pos = array_pos.offset(ptr_size);
+                    array_pos = array_pos.offset(1);
                 }
             }
         }

@@ -75,7 +75,7 @@ impl CBuffer {
         // Write strings
         for s in strings {
             *pos = self.write_str(s.to_string());
-            pos = pos.offset(ptr_size);
+            pos = pos.offset(1);
         }
 
         libc::memset(pos as *mut libc::c_void, 0, ptr_size as usize);
