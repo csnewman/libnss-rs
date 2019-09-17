@@ -1,6 +1,5 @@
 use crate::interop::CBuffer;
 use std::collections::VecDeque;
-use std::mem;
 
 pub struct Group {
     pub name: String,
@@ -14,21 +13,7 @@ impl Group {
         (*pwbuf).name = buffer.write_str(self.name);
         (*pwbuf).passwd = buffer.write_str(self.passwd);
         (*pwbuf).gid = self.gid;
-
-        // Allocate array
-        let ptr_size = mem::size_of::<*mut libc::c_char>() as isize;
-        let mut array_pos = buffer.reserve(ptr_size * ((self.members.len() + 1) as isize)) as *mut *mut libc::c_char;
-        (*pwbuf).members = array_pos;
-
-        // Store elements
-        for member in self.members {
-            // Store string
-            let pos = buffer.write_str(member);
-            *array_pos = pos;
-
-            // Offset pointer
-            array_pos = array_pos.offset(1);
-        }
+        (*pwbuf).members = buffer.write_strs(&self.members);
     }
 }
 
