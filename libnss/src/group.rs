@@ -1,5 +1,4 @@
 use crate::interop::CBuffer;
-use std::collections::VecDeque;
 
 pub struct Group {
     pub name: String,
@@ -34,33 +33,6 @@ pub struct CGroup {
     pub members: *mut *mut libc::c_char,
 }
 
-pub struct GroupIterator {
-    items: Option<VecDeque<Group>>,
-}
-
-impl GroupIterator {
-    pub fn new() -> Self {
-        GroupIterator {
-            items: None,
-        }
-    }
-
-    pub fn open(&mut self, items: Vec<Group>) {
-        self.items = Some(VecDeque::from(items));
-    }
-
-    pub fn next(&mut self) -> Option<Group> {
-        match self.items {
-            Some(ref mut val) => val.pop_front(),
-            None => panic!("Iterator not currently open")
-        }
-    }
-
-    pub fn close(&mut self) {
-        self.items = None;
-    }
-}
-
 #[macro_export]
 macro_rules! libnss_group_hooks {
 ($mod_ident:ident, $hooks_ident:ident) => (
@@ -72,23 +44,23 @@ macro_rules! libnss_group_hooks {
             use std::ffi::CStr;
             use std::str;
             use std::sync::{Mutex, MutexGuard};
-            use $crate::interop::{CBuffer, NssStatus};
-            use $crate::group::{CGroup, GroupHooks, GroupIterator};
+            use $crate::interop::{CBuffer, Iterator, NssStatus};
+            use $crate::group::{CGroup, GroupHooks, Group};
 
             lazy_static! {
-            static ref [<GROUP_ $mod_ident _ITERATOR>]: Mutex<GroupIterator> = Mutex::new(GroupIterator::new());
+            static ref [<GROUP_ $mod_ident _ITERATOR>]: Mutex<Iterator<Group>> = Mutex::new(Iterator::<Group>::new());
             }
 
             #[no_mangle]
             extern "C" fn [<_nss_ $mod_ident _setgrent>]() -> libc::c_int {
-                let mut iter: MutexGuard<GroupIterator> = [<GROUP_ $mod_ident _ITERATOR>].lock().unwrap();
+                let mut iter: MutexGuard<Iterator<Group>> = [<GROUP_ $mod_ident _ITERATOR>].lock().unwrap();
                 iter.open(super::$hooks_ident::get_all_entries());
                 NssStatus::Success.to_c()
             }
 
             #[no_mangle]
             extern "C" fn [<_nss_ $mod_ident _endgrent>]() -> libc::c_int {
-                let mut iter: MutexGuard<GroupIterator> = [<GROUP_ $mod_ident _ITERATOR>].lock().unwrap();
+                let mut iter: MutexGuard<Iterator<Group>> = [<GROUP_ $mod_ident _ITERATOR>].lock().unwrap();
                 iter.close();
 
                 NssStatus::Success.to_c()
@@ -97,7 +69,7 @@ macro_rules! libnss_group_hooks {
             #[no_mangle]
             unsafe extern "C" fn [<_nss_ $mod_ident _getgrent_r>](pwbuf: *mut CGroup, buf: *mut libc::c_char, buflen: libc::size_t,
                                                                   _errnop: *mut libc::c_int) -> libc::c_int {
-                let mut iter: MutexGuard<GroupIterator> = [<GROUP_ $mod_ident _ITERATOR>].lock().unwrap();
+                let mut iter: MutexGuard<Iterator<Group>> = [<GROUP_ $mod_ident _ITERATOR>].lock().unwrap();
                 match iter.next() {
                     None => $crate::interop::NssStatus::NotFound.to_c(),
                     Some(entry) => {

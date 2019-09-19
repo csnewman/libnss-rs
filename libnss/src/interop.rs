@@ -1,4 +1,5 @@
 use libc::c_int;
+use std::collections::VecDeque;
 use std::ffi::CString;
 
 #[allow(dead_code)]
@@ -19,6 +20,30 @@ impl NssStatus {
             NssStatus::Success => 1,
             NssStatus::Return => 2,
         }
+    }
+}
+
+pub struct Iterator<T> {
+    items: Option<VecDeque<T>>,
+}
+
+impl<T> Iterator<T> {
+    pub fn new() -> Self {
+        Iterator { items: None }
+    }
+    pub fn open(&mut self, items: Vec<T>) {
+        self.items = Some(VecDeque::from(items));
+    }
+
+    pub fn next(&mut self) -> Option<T> {
+        match self.items {
+            Some(ref mut val) => val.pop_front(),
+            None => panic!("Iterator not currently open"),
+        }
+    }
+
+    pub fn close(&mut self) {
+        self.items = None;
     }
 }
 

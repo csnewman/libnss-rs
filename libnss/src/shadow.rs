@@ -1,5 +1,4 @@
 use crate::interop::CBuffer;
-use std::collections::VecDeque;
 
 pub struct Shadow {
     pub name: String,
@@ -47,33 +46,6 @@ pub struct CShadow {
     pub reserved: u64,
 }
 
-pub struct ShadowIterator {
-    items: Option<VecDeque<Shadow>>,
-}
-
-impl ShadowIterator {
-    pub fn new() -> Self {
-        ShadowIterator {
-            items: None,
-        }
-    }
-
-    pub fn open(&mut self, items: Vec<Shadow>) {
-        self.items = Some(VecDeque::from(items));
-    }
-
-    pub fn next(&mut self) -> Option<Shadow> {
-        match self.items {
-            Some(ref mut val) => val.pop_front(),
-            None => panic!("Iterator not currently open")
-        }
-    }
-
-    pub fn close(&mut self) {
-        self.items = None;
-    }
-}
-
 #[macro_export]
 macro_rules! libnss_shadow_hooks {
 ($mod_ident:ident, $hooks_ident:ident) => (
@@ -85,23 +57,23 @@ macro_rules! libnss_shadow_hooks {
             use std::ffi::CStr;
             use std::str;
             use std::sync::{Mutex, MutexGuard};
-            use $crate::interop::{CBuffer, NssStatus};
-            use $crate::shadow::{CShadow, ShadowHooks, ShadowIterator};
+            use $crate::interop::{CBuffer, Iterator, NssStatus};
+            use $crate::shadow::{CShadow, ShadowHooks, Shadow};
 
             lazy_static! {
-            static ref [<SHADOW_ $mod_ident _ITERATOR>]: Mutex<ShadowIterator> = Mutex::new(ShadowIterator::new());
+            static ref [<SHADOW_ $mod_ident _ITERATOR>]: Mutex<Iterator<Shadow>> = Mutex::new(Iterator::<Shadow>::new());
             }
 
             #[no_mangle]
             extern "C" fn [<_nss_ $mod_ident _setspent>]() -> libc::c_int {
-                let mut iter: MutexGuard<ShadowIterator> = [<SHADOW_ $mod_ident _ITERATOR>].lock().unwrap();
+                let mut iter: MutexGuard<Iterator<Shadow>> = [<SHADOW_ $mod_ident _ITERATOR>].lock().unwrap();
                 iter.open(super::$hooks_ident::get_all_entries());
                 NssStatus::Success.to_c()
             }
 
             #[no_mangle]
             extern "C" fn [<_nss_ $mod_ident _endspent>]() -> libc::c_int {
-                let mut iter: MutexGuard<ShadowIterator> = [<SHADOW_ $mod_ident _ITERATOR>].lock().unwrap();
+                let mut iter: MutexGuard<Iterator<Shadow>> = [<SHADOW_ $mod_ident _ITERATOR>].lock().unwrap();
                 iter.close();
 
                 NssStatus::Success.to_c()
@@ -110,7 +82,7 @@ macro_rules! libnss_shadow_hooks {
             #[no_mangle]
             unsafe extern "C" fn [<_nss_ $mod_ident _getspent_r>](pwbuf: *mut CShadow, buf: *mut libc::c_char, buflen: libc::size_t,
                                                                   _errnop: *mut libc::c_int) -> libc::c_int {
-                let mut iter: MutexGuard<ShadowIterator> = [<SHADOW_ $mod_ident _ITERATOR>].lock().unwrap();
+                let mut iter: MutexGuard<Iterator<Shadow>> = [<SHADOW_ $mod_ident _ITERATOR>].lock().unwrap();
                 match iter.next() {
                     None => $crate::interop::NssStatus::NotFound.to_c(),
                     Some(entry) => {
