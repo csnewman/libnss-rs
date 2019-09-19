@@ -1,5 +1,4 @@
 use crate::interop::CBuffer;
-use std::collections::VecDeque;
 
 pub struct Passwd {
     pub name: String,
@@ -43,33 +42,6 @@ pub struct CPasswd {
     pub shell: *mut libc::c_char,
 }
 
-pub struct PasswdIterator {
-    items: Option<VecDeque<Passwd>>,
-}
-
-impl PasswdIterator {
-    pub fn new() -> Self {
-        PasswdIterator {
-            items: None,
-        }
-    }
-
-    pub fn open(&mut self, items: Vec<Passwd>) {
-        self.items = Some(VecDeque::from(items));
-    }
-
-    pub fn next(&mut self) -> Option<Passwd> {
-        match self.items {
-            Some(ref mut val) => val.pop_front(),
-            None => panic!("Iterator not currently open")
-        }
-    }
-
-    pub fn close(&mut self) {
-        self.items = None;
-    }
-}
-
 #[macro_export]
 macro_rules! libnss_passwd_hooks {
 ($mod_ident:ident, $hooks_ident:ident) => (
@@ -81,23 +53,23 @@ macro_rules! libnss_passwd_hooks {
             use std::ffi::CStr;
             use std::str;
             use std::sync::{Mutex, MutexGuard};
-            use $crate::interop::{CBuffer, NssStatus};
-            use $crate::passwd::{CPasswd, PasswdHooks, PasswdIterator};
+            use $crate::interop::{CBuffer, Iterator, NssStatus};
+            use $crate::passwd::{CPasswd, Passwd, PasswdHooks};
 
             lazy_static! {
-            static ref [<PASSWD_ $mod_ident _ITERATOR>]: Mutex<PasswdIterator> = Mutex::new(PasswdIterator::new());
+            static ref [<PASSWD_ $mod_ident _ITERATOR>]: Mutex<Iterator<Passwd>> = Mutex::new(Iterator::<Passwd>::new());
             }
 
             #[no_mangle]
             extern "C" fn [<_nss_ $mod_ident _setpwent>]() -> libc::c_int {
-                let mut iter: MutexGuard<PasswdIterator> = [<PASSWD_ $mod_ident _ITERATOR>].lock().unwrap();
+                let mut iter: MutexGuard<Iterator<Passwd>> = [<PASSWD_ $mod_ident _ITERATOR>].lock().unwrap();
                 iter.open(super::$hooks_ident::get_all_entries());
                 NssStatus::Success.to_c()
             }
 
             #[no_mangle]
             extern "C" fn [<_nss_ $mod_ident _endpwent>]() -> libc::c_int {
-                let mut iter: MutexGuard<PasswdIterator> = [<PASSWD_ $mod_ident _ITERATOR>].lock().unwrap();
+                let mut iter: MutexGuard<Iterator<Passwd>> = [<PASSWD_ $mod_ident _ITERATOR>].lock().unwrap();
                 iter.close();
 
                 NssStatus::Success.to_c()
@@ -106,7 +78,7 @@ macro_rules! libnss_passwd_hooks {
             #[no_mangle]
             unsafe extern "C" fn [<_nss_ $mod_ident _getpwent_r>](pwbuf: *mut CPasswd, buf: *mut libc::c_char, buflen: libc::size_t,
                                                                   _errnop: *mut libc::c_int) -> libc::c_int {
-                let mut iter: MutexGuard<PasswdIterator> = [<PASSWD_ $mod_ident _ITERATOR>].lock().unwrap();
+                let mut iter: MutexGuard<Iterator<Passwd>> = [<PASSWD_ $mod_ident _ITERATOR>].lock().unwrap();
                 match iter.next() {
                     None => $crate::interop::NssStatus::NotFound.to_c(),
                     Some(entry) => {
