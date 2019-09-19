@@ -5,6 +5,7 @@ Currently supports the following databases:
 - passwd
 - shadow
 - group
+- hosts
 
 ## Getting started
 - Create a new library

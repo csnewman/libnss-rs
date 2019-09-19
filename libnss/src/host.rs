@@ -9,6 +9,13 @@ pub struct Host {
     pub addresses: Addresses,
 }
 
+#[derive(PartialEq)]
+pub enum AddressFamily {
+    IPv4,
+    IPv6,
+    Unspecified,
+}
+
 pub enum Addresses {
     V4(Vec<Ipv4Addr>),
     V6(Vec<Ipv6Addr>),
@@ -18,8 +25,6 @@ impl Host {
     pub unsafe fn to_c_hostent(self, hostent: *mut CHost, buffer: &mut CBuffer) {
         (*hostent).name = buffer.write_str(self.name);
         (*hostent).h_aliases = buffer.write_strs(&self.aliases);
-
-        let ptr_size = mem::size_of::<*mut libc::c_char>() as isize;
 
         let (addr_len, count) = match &self.addresses {
             Addresses::V4(addrs) => {
@@ -36,8 +41,9 @@ impl Host {
             }
         };
 
+        let ptr_size = mem::size_of::<*mut libc::c_char>() as isize;
         let mut array_pos =
-            buffer.reserve(ptr_size * (count as isize) + 1) as *mut *mut libc::c_char;
+            buffer.reserve(ptr_size * (count as isize + 1)) as *mut *mut libc::c_char;
         (*hostent).h_addr_list = array_pos;
 
         match &self.addresses {
@@ -75,16 +81,13 @@ impl Host {
 
         // Write null termination
         libc::memset(array_pos as *mut libc::c_void, 0, 1);
-
-        // Set single / first address
-        (*hostent).h_addr = *(*hostent).h_addr_list;
     }
 }
 
 pub trait HostHooks {
     fn get_all_entries() -> Vec<Host>;
 
-    fn get_host_by_name(name: &str) -> Option<Host>;
+    fn get_host_by_name(name: &str, family: AddressFamily) -> Option<Host>;
 
     fn get_host_by_addr(addr: IpAddr) -> Option<Host>;
 }
@@ -93,13 +96,13 @@ pub trait HostHooks {
 /// https://ftp.gnu.org/old-gnu/Manuals/glibc-2.2.3/html_chapter/libc_16.html#SEC318
 #[repr(C)]
 #[allow(missing_copy_implementations)]
+#[derive(Debug)]
 pub struct CHost {
     pub name: *mut libc::c_char,
-    pub h_aliases: *mut libc::c_char,
+    pub h_aliases: *mut *mut libc::c_char,
     pub h_addrtype: libc::c_int,
     pub h_length: libc::c_int,
     pub h_addr_list: *mut *mut libc::c_char,
-    pub h_addr: *mut libc::c_char,
 }
 
 pub struct HostIterator {
@@ -140,7 +143,7 @@ macro_rules! libnss_host_hooks {
             use std::sync::{Mutex, MutexGuard};
             use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
             use $crate::interop::{CBuffer, NssStatus};
-            use $crate::host::{CHost, HostHooks, HostIterator};
+            use $crate::host::{CHost, HostHooks, HostIterator, AddressFamily};
 
             lazy_static! {
             static ref [<HOST_ $mod_ident _ITERATOR>]: Mutex<HostIterator> = Mutex::new(HostIterator::new());
@@ -161,7 +164,7 @@ macro_rules! libnss_host_hooks {
             }
 
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _gethostent_r>](hostbuf: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t,
+            unsafe extern "C" fn [<_nss_ $mod_ident _gethostent_r>](result: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t,
                                                                   _errnop: *mut libc::c_int) -> libc::c_int {
                 let mut iter: MutexGuard<HostIterator> = [<HOST_ $mod_ident _ITERATOR>].lock().unwrap();
                 match iter.next() {
@@ -170,14 +173,14 @@ macro_rules! libnss_host_hooks {
                         let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
                         buffer.clear();
 
-                        entry.to_c_hostent(hostbuf, &mut buffer);
+                        entry.to_c_hostent(result, &mut buffer);
                         NssStatus::Success.to_c()
                     }
                 }
             }
 
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyaddr_r>](addr: *const libc::c_char, len: libc::size_t, format: libc::c_int, hostbuf: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, result: *mut *mut CHost, _errnop: *mut libc::c_int) -> libc::c_int {
+            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyaddr_r>](addr: *const libc::c_char, len: libc::size_t, format: libc::c_int, result: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, _errnop: *mut libc::c_int, _herrnop: *mut libc::c_int) -> libc::c_int {
                 // Convert address type
                 let a = match (len, format) {
                     (4, libc::AF_INET) => {
@@ -201,7 +204,7 @@ macro_rules! libnss_host_hooks {
                         let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
                         buffer.clear();
 
-                        val.to_c_hostent(hostbuf, &mut buffer);
+                        val.to_c_hostent(result, &mut buffer);
                         NssStatus::Success.to_c()
                     },
                     None => NssStatus::NotFound.to_c()
@@ -209,20 +212,41 @@ macro_rules! libnss_host_hooks {
             }
 
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname_r>](name_: *const libc::c_char, hostbuf: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, result: *mut *mut CHost, _errnop: *mut libc::c_int) -> libc::c_int {
-                let cstr = CStr::from_ptr(name_);
+            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname_r>](name: *const libc::c_char, result: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, errnop: *mut libc::c_int, herrnop: *mut libc::c_int) -> libc::c_int {
+                [<_nss_ $mod_ident _gethostbyname2_r>](name, libc::AF_UNSPEC, result, buf, buflen, errnop, herrnop)
+            }
+
+            #[no_mangle]
+            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname2_r>](name: *const libc::c_char, family: libc::c_int, result: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, _errnop: *mut libc::c_int, _herrnop: *mut libc::c_int) -> libc::c_int {
+                let cstr = CStr::from_ptr(name);
 
                 match str::from_utf8(cstr.to_bytes()) {
-                    Ok(name) => match super::$hooks_ident::get_host_by_name(&name.to_string()) {
-                        Some(val) => {
-                            let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
-                            buffer.clear();
+                    Ok(name) => {
+                        let host = match family {
+                            libc::AF_INET => super::$hooks_ident::get_host_by_name(&name.to_string(), AddressFamily::IPv4),
+                            libc::AF_INET6 => super::$hooks_ident::get_host_by_name(&name.to_string(), AddressFamily::IPv6),
 
-                            val.to_c_hostent(hostbuf, &mut buffer);
-                            NssStatus::Success.to_c()
-                        },
-                        None => NssStatus::NotFound.to_c()
-                    },
+                            // If unspecified, we are probably being called from gethostbyname_r so
+                            // we will try IPv4 and if no results, then try IPv6
+                            libc::AF_UNSPEC => match super::$hooks_ident::get_host_by_name(&name.to_string(), AddressFamily::IPv4) {
+                                None => super::$hooks_ident::get_host_by_name(&name.to_string(), AddressFamily::IPv6),
+                                val => val,
+                            },
+                            _ => { return NssStatus::NotFound.to_c(); },
+                        };
+
+                        match host {
+                            Some(val) => {
+                                let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
+                                buffer.clear();
+
+                                val.to_c_hostent(result, &mut buffer);
+                                NssStatus::Success.to_c()
+                            },
+                            None => NssStatus::NotFound.to_c()
+                        }
+                    }
+
                     Err(_) => NssStatus::NotFound.to_c()
                 }
             }

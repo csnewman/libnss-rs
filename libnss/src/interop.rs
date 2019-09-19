@@ -66,20 +66,21 @@ impl CBuffer {
         str_start as *mut libc::c_char
     }
 
-    pub unsafe fn write_strs(&mut self, strings: &[String]) -> *mut libc::c_char {
-        // Capture start address
-        let str_start = self.pos;
+    pub unsafe fn write_strs(&mut self, strings: &[String]) -> *mut *mut libc::c_char {
+        let ptr_size = std::mem::size_of::<*mut libc::c_char>() as isize;
+
+        let vec_start = self.reserve(ptr_size * (strings.len() as isize + 1)) as *mut *mut libc::c_char;
+        let mut pos = vec_start;
+
         // Write strings
         for s in strings {
-            self.write_str(s.clone());
+            *pos = self.write_str(s.to_string());
+            pos = pos.offset(1);
         }
-        // Write null to end
-        libc::memset(self.pos, 0, 1);
-        // Update end address
-        self.pos.offset(1);
-        self.free -= 1;
 
-        str_start as *mut libc::c_char
+        libc::memset(pos as *mut libc::c_void, 0, ptr_size as usize);
+
+        vec_start
     }
 
     pub unsafe fn reserve(&mut self, len: isize) -> *mut libc::c_char {

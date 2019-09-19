@@ -7,7 +7,7 @@ extern crate libnss;
 use libnss::passwd::{PasswdHooks, Passwd};
 use libnss::group::{GroupHooks, Group};
 use libnss::shadow::{ShadowHooks, Shadow};
-use libnss::host::{HostHooks, Host};
+use libnss::host::{AddressFamily, Addresses, Host, HostHooks};
 
 struct HardcodedPasswd;
 libnss_passwd_hooks!(hardcoded, HardcodedPasswd);
@@ -145,21 +145,46 @@ impl ShadowHooks for HardcodedShadow {
     }
 }
 
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 
 struct HardcodedHost;
 libnss_host_hooks!(hardcoded, HardcodedHost);
 
 impl HostHooks for HardcodedHost {
     fn get_all_entries() -> Vec<Host> {
-        unimplemented!()
+        vec![Host {
+            name: "test.example".to_string(),
+            addresses: Addresses::V4(vec![Ipv4Addr::new(177, 42, 42, 42)]),
+            aliases: vec!["other.example".to_string()],
+        }]
     }
 
-    fn get_host_by_name(_name: &str) -> Option<Host> {
-        unimplemented!()
+    fn get_host_by_addr(addr: IpAddr) -> Option<Host> {
+        match addr {
+            IpAddr::V4(addr) => {
+                if addr.octets() == [177, 42, 42, 42] {
+                    Some(Host {
+                        name: "test.example".to_string(),
+                        addresses: Addresses::V4(vec![Ipv4Addr::new(177, 42, 42, 42)]),
+                        aliases: vec!["other.example".to_string()],
+                    })
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
     }
 
-    fn get_host_by_addr(_addr: IpAddr) -> Option<Host> {
-        unimplemented!()
+    fn get_host_by_name(name: &str, family: AddressFamily) -> Option<Host> {
+        if name.ends_with(".example") && family == AddressFamily::IPv4 {
+            Some(Host {
+                name: name.to_string(),
+                addresses: Addresses::V4(vec![Ipv4Addr::new(177, 42, 42, 42)]),
+                aliases: vec!["test.example".to_string(), "other.example".to_string()],
+            })
+        } else {
+            None
+        }
     }
 }
