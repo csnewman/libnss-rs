@@ -1,6 +1,7 @@
 use libc::c_int;
 use std::collections::VecDeque;
 use std::ffi::CString;
+use std::io;
 
 #[allow(dead_code)]
 pub enum NssStatus {
@@ -68,7 +69,7 @@ impl CBuffer {
         libc::memset(self.start, 0, self.len);
     }
 
-    pub unsafe fn write_str(&mut self, string: String) -> *mut libc::c_char {
+    pub unsafe fn write_str(&mut self, string: String) -> io::Result<*mut libc::c_char> {
         // Capture start address
         let str_start = self.pos;
 
@@ -79,7 +80,7 @@ impl CBuffer {
 
         // Ensure we have enough capacity
         if self.free < len + 1 {
-            panic!("Not enough free space in buffer");
+            return Err(io::Error::from_raw_os_error(libc::ERANGE));
         }
 
         // Copy string
@@ -88,38 +89,39 @@ impl CBuffer {
         self.free -= len as usize + 1;
 
         // Return start of string
-        str_start as *mut libc::c_char
+        Ok(str_start as *mut libc::c_char)
     }
 
-    pub unsafe fn write_strs(&mut self, strings: &[String]) -> *mut *mut libc::c_char {
+    pub unsafe fn write_strs(&mut self, strings: &[String]) -> io::Result<*mut *mut libc::c_char> {
         let ptr_size = std::mem::size_of::<*mut libc::c_char>() as isize;
 
-        let vec_start = self.reserve(ptr_size * (strings.len() as isize + 1)) as *mut *mut libc::c_char;
+        let vec_start =
+            self.reserve(ptr_size * (strings.len() as isize + 1))? as *mut *mut libc::c_char;
         let mut pos = vec_start;
 
         // Write strings
         for s in strings {
-            *pos = self.write_str(s.to_string());
+            *pos = self.write_str(s.to_string())?;
             pos = pos.offset(1);
         }
 
         libc::memset(pos as *mut libc::c_void, 0, ptr_size as usize);
 
-        vec_start
+        Ok(vec_start)
     }
 
-    pub unsafe fn reserve(&mut self, len: isize) -> *mut libc::c_char {
+    pub unsafe fn reserve(&mut self, len: isize) -> io::Result<*mut libc::c_char> {
         let start = self.pos;
 
         // Ensure we have enough capacity
         if self.free < len as usize {
-            panic!("Not enough free space in buffer");
+            return Err(io::Error::from_raw_os_error(libc::ERANGE));
         }
 
         // Reserve space
         self.pos = self.pos.offset(len as isize);
         self.free -= len as usize;
 
-        start as *mut libc::c_char
+        Ok(start as *mut libc::c_char)
     }
 }

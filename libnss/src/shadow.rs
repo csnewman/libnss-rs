@@ -13,9 +13,13 @@ pub struct Shadow {
 }
 
 impl Shadow {
-    pub unsafe fn to_c_shadow(self, pwbuf: *mut CShadow, buffer: &mut CBuffer) {
-        (*pwbuf).name = buffer.write_str(self.name);
-        (*pwbuf).passwd = buffer.write_str(self.passwd);
+    pub unsafe fn to_c_shadow(
+        self,
+        pwbuf: *mut CShadow,
+        buffer: &mut CBuffer,
+    ) -> std::io::Result<()> {
+        (*pwbuf).name = buffer.write_str(self.name)?;
+        (*pwbuf).passwd = buffer.write_str(self.passwd)?;
         (*pwbuf).last_change = self.last_change;
         (*pwbuf).change_min_days = self.change_min_days;
         (*pwbuf).change_max_days = self.change_max_days;
@@ -23,6 +27,7 @@ impl Shadow {
         (*pwbuf).change_inactive_days = self.change_inactive_days;
         (*pwbuf).expire_date = self.expire_date;
         (*pwbuf).reserved = self.reserved;
+        Ok(())
     }
 }
 
@@ -81,7 +86,7 @@ macro_rules! libnss_shadow_hooks {
 
             #[no_mangle]
             unsafe extern "C" fn [<_nss_ $mod_ident _getspent_r>](pwbuf: *mut CShadow, buf: *mut libc::c_char, buflen: libc::size_t,
-                                                                  _errnop: *mut libc::c_int) -> libc::c_int {
+                                                                  errnop: *mut libc::c_int) -> libc::c_int {
                 let mut iter: MutexGuard<Iterator<Shadow>> = [<SHADOW_ $mod_ident _ITERATOR>].lock().unwrap();
                 match iter.next() {
                     None => $crate::interop::NssStatus::NotFound.to_c(),
@@ -89,15 +94,31 @@ macro_rules! libnss_shadow_hooks {
                         let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
                         buffer.clear();
 
-                        entry.to_c_shadow(pwbuf, &mut buffer);
-                        NssStatus::Success.to_c()
+                        match entry.to_c_shadow(pwbuf, &mut buffer) {
+                            Err(e) => {
+                                match e.raw_os_error() {
+                                   Some(e) =>{
+                                       *errnop = e;
+                                       NssStatus::TryAgain.to_c()
+                                   },
+                                   None => {
+                                       *errnop = libc::ENOENT;
+                                       NssStatus::Unavail.to_c()
+                                   }
+                               }
+                            },
+                            Ok(_) => {
+                                *errnop = 0;
+                                NssStatus::Success.to_c()
+                            }
+                        }
                     }
                 }
             }
 
             #[no_mangle]
             unsafe extern "C" fn [<_nss_ $mod_ident _getspnam_r>](name_: *const libc::c_char, pwbuf: *mut CShadow, buf: *mut libc::c_char,
-                                                                  buflen: libc::size_t, _errnop: *mut libc::c_int) -> libc::c_int {
+                                                                  buflen: libc::size_t, errnop: *mut libc::c_int) -> libc::c_int {
                 let cstr = CStr::from_ptr(name_);
 
                 match str::from_utf8(cstr.to_bytes()) {
@@ -106,8 +127,24 @@ macro_rules! libnss_shadow_hooks {
                             let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
                             buffer.clear();
 
-                            val.to_c_shadow(pwbuf, &mut buffer);
-                            NssStatus::Success.to_c()
+                            match val.to_c_shadow(pwbuf, &mut buffer) {
+                                Err(e) => {
+                                    match e.raw_os_error() {
+                                       Some(e) =>{
+                                           *errnop = e;
+                                           NssStatus::TryAgain.to_c()
+                                       },
+                                       None => {
+                                           *errnop = libc::ENOENT;
+                                           NssStatus::Unavail.to_c()
+                                       }
+                                   }
+                                },
+                                Ok(_) => {
+                                    *errnop = 0;
+                                    NssStatus::Success.to_c()
+                                }
+                            }
                         },
                         None => NssStatus::NotFound.to_c()
                     },
