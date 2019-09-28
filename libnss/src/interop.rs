@@ -1,25 +1,72 @@
-use libc::c_int;
 use std::collections::VecDeque;
 use std::ffi::CString;
 use std::io;
 
+pub trait ToC<C> {
+    unsafe fn to_c(&self, result: *mut C, buffer: &mut CBuffer) -> std::io::Result<()>;
+}
+
 #[allow(dead_code)]
 pub enum NssStatus {
+    TryAgain = -2,
+    Unavail = -1,
+    NotFound = 0,
+    Success = 1,
+    Return = 2,
+}
+
+pub enum Response<R> {
     TryAgain,
     Unavail,
     NotFound,
-    Success,
+    Success(R),
     Return,
 }
 
-impl NssStatus {
-    pub fn to_c(&self) -> c_int {
-        match *self {
-            NssStatus::TryAgain => -2,
-            NssStatus::Unavail => -1,
-            NssStatus::NotFound => 0,
-            NssStatus::Success => 1,
-            NssStatus::Return => 2,
+impl<R> Response<R> {
+    pub fn to_status(&self) -> NssStatus {
+        use NssStatus::*;
+        match self {
+            Self::Success(..) => Success,
+            Self::TryAgain => TryAgain,
+            Self::Unavail => Unavail,
+            Self::NotFound => NotFound,
+            Self::Return => Return,
+        }
+    }
+
+    pub unsafe fn to_c<C>(
+        &self,
+        result: *mut C,
+        buf: *mut libc::c_char,
+        buflen: libc::size_t,
+        errnop: *mut libc::c_int,
+    ) -> NssStatus
+    where
+        R: ToC<C>,
+    {
+        if let Self::Success(entity) = self {
+            let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
+            buffer.clear();
+
+            match entity.to_c(result, &mut buffer) {
+                Ok(()) => {
+                    *errnop = 0;
+                    self.to_status()
+                }
+                Err(e) => match e.raw_os_error() {
+                    Some(e) => {
+                        *errnop = e;
+                        Self::TryAgain.to_status()
+                    }
+                    None => {
+                        *errnop = libc::ENOENT;
+                        Self::Unavail.to_status()
+                    }
+                },
+            }
+        } else {
+            self.to_status()
         }
     }
 }
@@ -32,19 +79,24 @@ impl<T> Iterator<T> {
     pub fn new() -> Self {
         Iterator { items: None }
     }
-    pub fn open(&mut self, items: Vec<T>) {
+    pub fn open(&mut self, items: Vec<T>) -> NssStatus {
         self.items = Some(VecDeque::from(items));
+        NssStatus::Success
     }
 
-    pub fn next(&mut self) -> Option<T> {
+    pub fn next(&mut self) -> Response<T> {
         match self.items {
-            Some(ref mut val) => val.pop_front(),
-            None => panic!("Iterator not currently open"),
+            Some(ref mut items) => match items.pop_front() {
+                Some(entity) => Response::Success(entity),
+                None => Response::NotFound,
+            },
+            None => Response::Unavail,
         }
     }
 
-    pub fn close(&mut self) {
+    pub fn close(&mut self) -> NssStatus {
         self.items = None;
+        NssStatus::Success
     }
 }
 
@@ -69,7 +121,7 @@ impl CBuffer {
         libc::memset(self.start, 0, self.len);
     }
 
-    pub unsafe fn write_str(&mut self, string: String) -> io::Result<*mut libc::c_char> {
+    pub unsafe fn write_str(&mut self, string: &str) -> io::Result<*mut libc::c_char> {
         // Capture start address
         let str_start = self.pos;
 
@@ -92,7 +144,10 @@ impl CBuffer {
         Ok(str_start as *mut libc::c_char)
     }
 
-    pub unsafe fn write_strs(&mut self, strings: &[String]) -> io::Result<*mut *mut libc::c_char> {
+    pub unsafe fn write_strs<S: AsRef<str>>(
+        &mut self,
+        strings: &[S],
+    ) -> io::Result<*mut *mut libc::c_char> {
         let ptr_size = std::mem::size_of::<*mut libc::c_char>() as isize;
 
         let vec_start =
@@ -101,7 +156,7 @@ impl CBuffer {
 
         // Write strings
         for s in strings {
-            *pos = self.write_str(s.to_string())?;
+            *pos = self.write_str(s.as_ref())?;
             pos = pos.offset(1);
         }
 

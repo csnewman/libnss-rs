@@ -1,4 +1,4 @@
-use crate::interop::CBuffer;
+use crate::interop::{CBuffer, Response, ToC};
 
 pub struct Passwd {
     pub name: String,
@@ -10,29 +10,25 @@ pub struct Passwd {
     pub shell: String,
 }
 
-impl Passwd {
-    pub unsafe fn to_c_passwd(
-        self,
-        pwbuf: *mut CPasswd,
-        buffer: &mut CBuffer,
-    ) -> std::io::Result<()> {
-        (*pwbuf).name = buffer.write_str(self.name)?;
-        (*pwbuf).passwd = buffer.write_str(self.passwd)?;
-        (*pwbuf).uid = self.uid;
-        (*pwbuf).gid = self.gid;
-        (*pwbuf).gecos = buffer.write_str(self.gecos)?;
-        (*pwbuf).dir = buffer.write_str(self.dir)?;
-        (*pwbuf).shell = buffer.write_str(self.shell)?;
+impl ToC<CPasswd> for Passwd {
+    unsafe fn to_c(&self, result: *mut CPasswd, buffer: &mut CBuffer) -> std::io::Result<()> {
+        (*result).name = buffer.write_str(&self.name)?;
+        (*result).passwd = buffer.write_str(&self.passwd)?;
+        (*result).uid = self.uid;
+        (*result).gid = self.gid;
+        (*result).gecos = buffer.write_str(&self.gecos)?;
+        (*result).dir = buffer.write_str(&self.dir)?;
+        (*result).shell = buffer.write_str(&self.shell)?;
         Ok(())
     }
 }
 
 pub trait PasswdHooks {
-    fn get_all_entries() -> Vec<Passwd>;
+    fn get_all_entries() -> Response<Vec<Passwd>>;
 
-    fn get_entry_by_uid(uid: libc::uid_t) -> Option<Passwd>;
+    fn get_entry_by_uid(uid: libc::uid_t) -> Response<Passwd>;
 
-    fn get_entry_by_name(name: String) -> Option<Passwd>;
+    fn get_entry_by_name(name: String) -> Response<Passwd>;
 }
 
 #[repr(C)]
@@ -55,10 +51,11 @@ macro_rules! libnss_passwd_hooks {
         mod [<libnss_passwd_ $mod_ident _hooks_impl>] {
             #![allow(non_upper_case_globals)]
 
+            use libc::c_int;
             use std::ffi::CStr;
             use std::str;
             use std::sync::{Mutex, MutexGuard};
-            use $crate::interop::{CBuffer, Iterator, NssStatus};
+            use $crate::interop::{CBuffer, Iterator, Response};
             use $crate::passwd::{CPasswd, Passwd, PasswdHooks};
 
             lazy_static! {
@@ -66,117 +63,61 @@ macro_rules! libnss_passwd_hooks {
             }
 
             #[no_mangle]
-            extern "C" fn [<_nss_ $mod_ident _setpwent>]() -> libc::c_int {
+            extern "C" fn [<_nss_ $mod_ident _setpwent>]() -> c_int {
                 let mut iter: MutexGuard<Iterator<Passwd>> = [<PASSWD_ $mod_ident _ITERATOR>].lock().unwrap();
-                iter.open(super::$hooks_ident::get_all_entries());
-                NssStatus::Success.to_c()
+
+                let status = match(super::$hooks_ident::get_all_entries()) {
+                    Response::Success(entries) => iter.open(entries),
+                    response => response.to_status()
+                };
+
+                status as c_int
             }
 
             #[no_mangle]
-            extern "C" fn [<_nss_ $mod_ident _endpwent>]() -> libc::c_int {
+            extern "C" fn [<_nss_ $mod_ident _endpwent>]() -> c_int {
                 let mut iter: MutexGuard<Iterator<Passwd>> = [<PASSWD_ $mod_ident _ITERATOR>].lock().unwrap();
-                iter.close();
-
-                NssStatus::Success.to_c()
+                iter.close() as c_int
             }
 
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _getpwent_r>](pwbuf: *mut CPasswd, buf: *mut libc::c_char, buflen: libc::size_t,
-                                                                  errnop: *mut libc::c_int) -> libc::c_int {
+            unsafe extern "C" fn [<_nss_ $mod_ident _getpwent_r>](
+                result: *mut CPasswd,
+                buf: *mut libc::c_char,
+                buflen: libc::size_t,
+                errnop: *mut c_int
+            ) -> c_int {
                 let mut iter: MutexGuard<Iterator<Passwd>> = [<PASSWD_ $mod_ident _ITERATOR>].lock().unwrap();
-                match iter.next() {
-                    None => $crate::interop::NssStatus::NotFound.to_c(),
-                    Some(entry) => {
-                        let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
-                        buffer.clear();
-
-                        match entry.to_c_passwd(pwbuf, &mut buffer) {
-                            Err(e) => {
-                                match e.raw_os_error() {
-                                   Some(e) =>{
-                                       *errnop = e;
-                                       NssStatus::TryAgain.to_c()
-                                   },
-                                   None => {
-                                       *errnop = libc::ENOENT;
-                                       NssStatus::Unavail.to_c()
-                                   }
-                               }
-                            },
-                            Ok(_) => {
-                                *errnop = 0;
-                                NssStatus::Success.to_c()
-                            }
-                        }
-                    }
-                }
+                iter.next().to_c(result, buf, buflen, errnop) as c_int
             }
 
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _getpwuid_r>](uid: libc::uid_t, pwbuf: *mut CPasswd, buf: *mut libc::c_char,
-                                                           buflen: libc::size_t, errnop: *mut libc::c_int) -> libc::c_int {
-                match super::$hooks_ident::get_entry_by_uid(uid) {
-                    Some(val) => {
-                        let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
-                        buffer.clear();
-
-                        match val.to_c_passwd(pwbuf, &mut buffer) {
-                            Err(e) => {
-                                match e.raw_os_error() {
-                                   Some(e) =>{
-                                       *errnop = e;
-                                       NssStatus::TryAgain.to_c()
-                                   },
-                                   None => {
-                                       *errnop = libc::ENOENT;
-                                       NssStatus::Unavail.to_c()
-                                   }
-                               }
-                            },
-                            Ok(_) => {
-                                *errnop = 0;
-                                NssStatus::Success.to_c()
-                            }
-                        }
-                    },
-                    None => NssStatus::NotFound.to_c()
-                }
+            unsafe extern "C" fn [<_nss_ $mod_ident _getpwuid_r>](
+                uid: libc::uid_t,
+                result: *mut CPasswd,
+                buf: *mut libc::c_char,
+                buflen: libc::size_t,
+                errnop: *mut c_int
+            ) -> c_int {
+                super::$hooks_ident::get_entry_by_uid(uid).to_c(result, buf, buflen, errnop) as c_int
             }
 
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _getpwnam_r>](name_: *const libc::c_char, pwbuf: *mut CPasswd, buf: *mut libc::c_char,
-                                                           buflen: libc::size_t, errnop: *mut libc::c_int) -> libc::c_int {
+            unsafe extern "C" fn [<_nss_ $mod_ident _getpwnam_r>](
+                name_: *const libc::c_char,
+                result: *mut CPasswd,
+                buf: *mut libc::c_char,
+                buflen: libc::size_t,
+                errnop: *mut c_int
+            ) -> c_int {
                 let cstr = CStr::from_ptr(name_);
 
-                match str::from_utf8(cstr.to_bytes()) {
-                    Ok(name) => match super::$hooks_ident::get_entry_by_name(name.to_string()) {
-                        Some(val) => {
-                            let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
-                            buffer.clear();
+                let response = match str::from_utf8(cstr.to_bytes()) {
+                    Ok(name) => super::$hooks_ident::get_entry_by_name(name.to_string()),
+                    Err(_) => Response::NotFound
+                };
 
-                            match val.to_c_passwd(pwbuf, &mut buffer) {
-                                Err(e) => {
-                                    match e.raw_os_error() {
-                                       Some(e) =>{
-                                           *errnop = e;
-                                           NssStatus::TryAgain.to_c()
-                                       },
-                                       None => {
-                                           *errnop = libc::ENOENT;
-                                           NssStatus::Unavail.to_c()
-                                       }
-                                   }
-                                },
-                                Ok(_) => {
-                                    *errnop = 0;
-                                    NssStatus::Success.to_c()
-                                }
-                            }
-                        },
-                        None => NssStatus::NotFound.to_c()
-                    },
-                    Err(_) => NssStatus::NotFound.to_c()
-                }
+                response.to_c(result, buf, buflen, errnop) as c_int
             }
         }
     }

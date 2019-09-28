@@ -1,4 +1,4 @@
-use crate::interop::CBuffer;
+use crate::interop::{CBuffer, Response, ToC};
 use std::mem;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 
@@ -20,14 +20,10 @@ pub enum Addresses {
     V6(Vec<Ipv6Addr>),
 }
 
-impl Host {
-    pub unsafe fn to_c_hostent(
-        self,
-        hostent: *mut CHost,
-        buffer: &mut CBuffer,
-    ) -> std::io::Result<()> {
-        (*hostent).name = buffer.write_str(self.name)?;
-        (*hostent).h_aliases = buffer.write_strs(&self.aliases)?;
+impl ToC<CHost> for Host {
+    unsafe fn to_c(&self, hostent: *mut CHost, buffer: &mut CBuffer) -> std::io::Result<()> {
+        (*hostent).name = buffer.write_str(&self.name)?;
+        (*hostent).h_aliases = buffer.write_strs(&self.aliases[..])?;
 
         let (addr_len, count) = match &self.addresses {
             Addresses::V4(addrs) => {
@@ -89,11 +85,11 @@ impl Host {
 }
 
 pub trait HostHooks {
-    fn get_all_entries() -> Vec<Host>;
+    fn get_all_entries() -> Response<Vec<Host>>;
 
-    fn get_host_by_name(name: &str, family: AddressFamily) -> Option<Host>;
+    fn get_host_by_name(name: &str, family: AddressFamily) -> Response<Host>;
 
-    fn get_host_by_addr(addr: IpAddr) -> Option<Host>;
+    fn get_host_by_addr(addr: IpAddr) -> Response<Host>;
 }
 
 /// NSS C Host object
@@ -117,12 +113,13 @@ macro_rules! libnss_host_hooks {
         mod [<libnss_host_ $mod_ident _hooks_impl>] {
             #![allow(non_upper_case_globals)]
 
+            use libc::c_int;
             use std::ffi::CStr;
             use std::str;
             use std::sync::{Mutex, MutexGuard};
             use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
             use $crate::host::{CHost, HostHooks, Host, AddressFamily};
-            use $crate::interop::{CBuffer, NssStatus, Iterator};
+            use $crate::interop::{CBuffer, Response, NssStatus, Iterator};
 
             // https://code.woboq.org/userspace/glibc/resolv/netdb.h.html#62
             enum Herrno {
@@ -138,53 +135,39 @@ macro_rules! libnss_host_hooks {
             }
 
             #[no_mangle]
-            extern "C" fn [<_nss_ $mod_ident _sethostent>]() -> libc::c_int {
+            extern "C" fn [<_nss_ $mod_ident _sethostent>]() -> c_int {
                 let mut iter: MutexGuard<Iterator<Host>> = [<HOST_ $mod_ident _ITERATOR>].lock().unwrap();
-                iter.open(super::$hooks_ident::get_all_entries());
-                NssStatus::Success.to_c()
+                let status = match(super::$hooks_ident::get_all_entries()) {
+                    Response::Success(entries) => iter.open(entries),
+                    response => response.to_status()
+                };
+                status as c_int
             }
 
             #[no_mangle]
-            extern "C" fn [<_nss_ $mod_ident _endhostent>]() -> libc::c_int {
+            extern "C" fn [<_nss_ $mod_ident _endhostent>]() -> c_int {
                 let mut iter: MutexGuard<Iterator<Host>> = [<HOST_ $mod_ident _ITERATOR>].lock().unwrap();
-                iter.close();
-                NssStatus::Success.to_c()
+                iter.close() as c_int
             }
 
             #[no_mangle]
             unsafe extern "C" fn [<_nss_ $mod_ident _gethostent_r>](result: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t,
-                                                                  errnop: *mut libc::c_int) -> libc::c_int {
+                                                                  errnop: *mut c_int) -> c_int {
                 let mut iter: MutexGuard<Iterator<Host>> = [<HOST_ $mod_ident _ITERATOR>].lock().unwrap();
-                match iter.next() {
-                    None => $crate::interop::NssStatus::NotFound.to_c(),
-                    Some(entry) => {
-                        let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
-                        buffer.clear();
-
-                        match entry.to_c_hostent(result, &mut buffer) {
-                            Err(e) => {
-                                match e.raw_os_error() {
-                                   Some(e) =>{
-                                       *errnop = e;
-                                       NssStatus::TryAgain.to_c()
-                                   },
-                                   None => {
-                                       *errnop = libc::ENOENT;
-                                       NssStatus::Unavail.to_c()
-                                   }
-                               }
-                            },
-                            Ok(_) => {
-                                *errnop = 0;
-                                NssStatus::Success.to_c()
-                            }
-                        }
-                    }
-                }
+                iter.next().to_c(result, buf, buflen, errnop) as c_int
             }
 
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyaddr_r>](addr: *const libc::c_char, len: libc::size_t, format: libc::c_int, result: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, errnop: *mut libc::c_int, h_errnop: *mut libc::c_int) -> libc::c_int {
+            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyaddr_r>](
+                addr: *const libc::c_char,
+                len: libc::size_t,
+                format: c_int,
+                result: *mut CHost,
+                buf: *mut libc::c_char,
+                buflen: libc::size_t,
+                errnop: *mut c_int,
+                h_errnop: *mut c_int
+            ) -> c_int {
                 *h_errnop = Herrno::NetDbInternal as i32;
 
                 // Convert address type
@@ -201,98 +184,79 @@ macro_rules! libnss_host_hooks {
                     },
                     _ => {
                         //error!("address length and format mismatch (length: {}, format: {})", len, format);
-                        return NssStatus::NotFound.to_c();
+                        return NssStatus::NotFound as c_int;
                     }
                 };
 
                 match super::$hooks_ident::get_host_by_addr(a) {
-                    Some(val) => {
-                        let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
-                        buffer.clear();
-
-                        match val.to_c_hostent(result, &mut buffer) {
-                            Err(e) => {
-                                match e.raw_os_error() {
-                                    Some(e) =>{
-                                        *errnop = e;
-                                        NssStatus::TryAgain.to_c()
-                                    },
-                                    None => {
-                                        *errnop = libc::ENOENT;
-                                        NssStatus::Unavail.to_c()
-                                    }
-                               }
-                            },
-                            Ok(_) => {
-                                *errnop = 0;
-                                *h_errnop = Herrno::NetDbSuccess as i32;
-                                NssStatus::Success.to_c()
-                            }
-                        }
+                    response @ Response::Success(..) => {
+                        *h_errnop = Herrno::NetDbSuccess as i32;
+                        response
                     },
-                    None => NssStatus::NotFound.to_c()
-                }
+                    response => response
+                }.to_c(result, buf, buflen, errnop) as c_int
             }
 
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname_r>](name: *const libc::c_char, result: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, errnop: *mut libc::c_int, h_errnop: *mut libc::c_int) -> libc::c_int {
+            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname_r>](
+                name: *const libc::c_char,
+                result: *mut CHost,
+                buf: *mut libc::c_char,
+                buflen: libc::size_t,
+                errnop: *mut libc::c_int,
+                h_errnop: *mut libc::c_int
+            ) -> libc::c_int {
                 [<_nss_ $mod_ident _gethostbyname2_r>](name, libc::AF_UNSPEC, result, buf, buflen, errnop, h_errnop)
             }
 
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname2_r>](name: *const libc::c_char, family: libc::c_int, result: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t, errnop: *mut libc::c_int, h_errnop: *mut libc::c_int) -> libc::c_int {
-                let cstr = CStr::from_ptr(name);
-                *h_errnop = Herrno::NetDbInternal as i32;
+            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname2_r>](
+                name: *const libc::c_char,
+                family: libc::c_int,
+                result: *mut CHost,
+                buf: *mut libc::c_char,
+                buflen: libc::size_t,
+                errnop: *mut libc::c_int,
+                h_errnop: *mut libc::c_int
+            ) -> libc::c_int {
 
-                match str::from_utf8(cstr.to_bytes()) {
+                let cstr = CStr::from_ptr(name);
+
+                let status = match str::from_utf8(cstr.to_bytes()) {
                     Ok(name) => {
-                        let host = match family {
-                            libc::AF_INET => super::$hooks_ident::get_host_by_name(&name.to_string(), AddressFamily::IPv4),
-                            libc::AF_INET6 => super::$hooks_ident::get_host_by_name(&name.to_string(), AddressFamily::IPv6),
+                        use super::$hooks_ident as hooks;
+                        let status = match family {
+                            libc::AF_INET => hooks::get_host_by_name(&name.to_string(), AddressFamily::IPv4),
+                            libc::AF_INET6 => hooks::get_host_by_name(&name.to_string(), AddressFamily::IPv6),
 
                             // If unspecified, we are probably being called from gethostbyname_r so
                             // we will try IPv4 and if no results, then try IPv6
-                            libc::AF_UNSPEC => match super::$hooks_ident::get_host_by_name(&name.to_string(), AddressFamily::IPv4) {
-                                None => super::$hooks_ident::get_host_by_name(&name.to_string(), AddressFamily::IPv6),
+                            libc::AF_UNSPEC => match hooks::get_host_by_name(&name.to_string(), AddressFamily::IPv4) {
+                                Response::NotFound => hooks::get_host_by_name(&name.to_string(), AddressFamily::IPv6),
                                 val => val,
                             },
                             _ => {
                                 *h_errnop = Herrno::NoRecovery as i32;
-                                return NssStatus::Unavail.to_c();
+                                Response::Unavail
                             },
+                        }.to_c(result, buf, buflen, errnop);
+
+                        match status {
+                            NssStatus::Success => {
+                                *h_errnop = Herrno::NetDbSuccess as i32
+                            }
+                            _ => {
+                                *h_errnop = Herrno::NetDbInternal as i32
+                            }
                         };
 
-                        match host {
-                            Some(val) => {
-                                let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
-                                buffer.clear();
-
-                                match val.to_c_hostent(result, &mut buffer) {
-                                    Err(e) => {
-                                        match e.raw_os_error() {
-                                            Some(e) =>{
-                                                *errnop = e;
-                                                NssStatus::TryAgain.to_c()
-                                            },
-                                            None => {
-                                                *errnop = libc::ENOENT;
-                                                NssStatus::Unavail.to_c()
-                                            }
-                                       }
-                                    },
-                                    Ok(_) => {
-                                        *errnop = 0;
-                                        *h_errnop = Herrno::NetDbSuccess as i32;
-                                        NssStatus::Success.to_c()
-                                    }
-                                }
-                            },
-                            None => NssStatus::NotFound.to_c()
-                        }
+                        status
                     }
 
-                    Err(_) => NssStatus::NotFound.to_c()
-                }
+                    Err(_) => NssStatus::NotFound
+                };
+
+                status as c_int
             }
 
         }
