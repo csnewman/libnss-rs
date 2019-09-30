@@ -1,4 +1,4 @@
-use crate::interop::CBuffer;
+use crate::interop::{CBuffer, Response, ToC};
 
 pub struct Shadow {
     pub name: String,
@@ -12,29 +12,25 @@ pub struct Shadow {
     pub reserved: u64,
 }
 
-impl Shadow {
-    pub unsafe fn to_c_shadow(
-        self,
-        pwbuf: *mut CShadow,
-        buffer: &mut CBuffer,
-    ) -> std::io::Result<()> {
-        (*pwbuf).name = buffer.write_str(self.name)?;
-        (*pwbuf).passwd = buffer.write_str(self.passwd)?;
-        (*pwbuf).last_change = self.last_change;
-        (*pwbuf).change_min_days = self.change_min_days;
-        (*pwbuf).change_max_days = self.change_max_days;
-        (*pwbuf).change_warn_days = self.change_warn_days;
-        (*pwbuf).change_inactive_days = self.change_inactive_days;
-        (*pwbuf).expire_date = self.expire_date;
-        (*pwbuf).reserved = self.reserved;
+impl ToC<CShadow> for Shadow {
+    unsafe fn to_c(&self, result: *mut CShadow, buffer: &mut CBuffer) -> std::io::Result<()> {
+        (*result).name = buffer.write_str(&self.name)?;
+        (*result).passwd = buffer.write_str(&self.passwd)?;
+        (*result).last_change = self.last_change;
+        (*result).change_min_days = self.change_min_days;
+        (*result).change_max_days = self.change_max_days;
+        (*result).change_warn_days = self.change_warn_days;
+        (*result).change_inactive_days = self.change_inactive_days;
+        (*result).expire_date = self.expire_date;
+        (*result).reserved = self.reserved;
         Ok(())
     }
 }
 
 pub trait ShadowHooks {
-    fn get_all_entries() -> Vec<Shadow>;
+    fn get_all_entries() -> Response<Vec<Shadow>>;
 
-    fn get_entry_by_name(name: String) -> Option<Shadow>;
+    fn get_entry_by_name(name: String) -> Response<Shadow>;
 }
 
 #[repr(C)]
@@ -59,10 +55,11 @@ macro_rules! libnss_shadow_hooks {
         mod [<libnss_shadow_ $mod_ident _hooks_impl>] {
             #![allow(non_upper_case_globals)]
 
+            use libc::c_int;
             use std::ffi::CStr;
             use std::str;
             use std::sync::{Mutex, MutexGuard};
-            use $crate::interop::{CBuffer, Iterator, NssStatus};
+            use $crate::interop::{CBuffer, Iterator, Response};
             use $crate::shadow::{CShadow, ShadowHooks, Shadow};
 
             lazy_static! {
@@ -70,86 +67,46 @@ macro_rules! libnss_shadow_hooks {
             }
 
             #[no_mangle]
-            extern "C" fn [<_nss_ $mod_ident _setspent>]() -> libc::c_int {
+            extern "C" fn [<_nss_ $mod_ident _setspent>]() -> c_int {
                 let mut iter: MutexGuard<Iterator<Shadow>> = [<SHADOW_ $mod_ident _ITERATOR>].lock().unwrap();
-                iter.open(super::$hooks_ident::get_all_entries());
-                NssStatus::Success.to_c()
+                let status = match(super::$hooks_ident::get_all_entries()) {
+                    Response::Success(entries) => iter.open(entries),
+                    response => response.to_status()
+                };
+                status as c_int
             }
 
             #[no_mangle]
-            extern "C" fn [<_nss_ $mod_ident _endspent>]() -> libc::c_int {
+            extern "C" fn [<_nss_ $mod_ident _endspent>]() -> c_int {
                 let mut iter: MutexGuard<Iterator<Shadow>> = [<SHADOW_ $mod_ident _ITERATOR>].lock().unwrap();
-                iter.close();
-
-                NssStatus::Success.to_c()
+                iter.close() as c_int
             }
 
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _getspent_r>](pwbuf: *mut CShadow, buf: *mut libc::c_char, buflen: libc::size_t,
-                                                                  errnop: *mut libc::c_int) -> libc::c_int {
+            unsafe extern "C" fn [<_nss_ $mod_ident _getspent_r>](
+                result: *mut CShadow,
+                buf: *mut libc::c_char,
+                buflen: libc::size_t,
+                errnop: *mut c_int
+            ) -> c_int {
                 let mut iter: MutexGuard<Iterator<Shadow>> = [<SHADOW_ $mod_ident _ITERATOR>].lock().unwrap();
-                match iter.next() {
-                    None => $crate::interop::NssStatus::NotFound.to_c(),
-                    Some(entry) => {
-                        let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
-                        buffer.clear();
-
-                        match entry.to_c_shadow(pwbuf, &mut buffer) {
-                            Err(e) => {
-                                match e.raw_os_error() {
-                                   Some(e) =>{
-                                       *errnop = e;
-                                       NssStatus::TryAgain.to_c()
-                                   },
-                                   None => {
-                                       *errnop = libc::ENOENT;
-                                       NssStatus::Unavail.to_c()
-                                   }
-                               }
-                            },
-                            Ok(_) => {
-                                *errnop = 0;
-                                NssStatus::Success.to_c()
-                            }
-                        }
-                    }
-                }
+                iter.next().to_c(result, buf, buflen, errnop) as c_int
             }
 
             #[no_mangle]
-            unsafe extern "C" fn [<_nss_ $mod_ident _getspnam_r>](name_: *const libc::c_char, pwbuf: *mut CShadow, buf: *mut libc::c_char,
-                                                                  buflen: libc::size_t, errnop: *mut libc::c_int) -> libc::c_int {
+            unsafe extern "C" fn [<_nss_ $mod_ident _getspnam_r>](
+                name_: *const libc::c_char,
+                result: *mut CShadow,
+                buf: *mut libc::c_char,
+                buflen: libc::size_t,
+                errnop: *mut c_int
+            ) -> c_int {
                 let cstr = CStr::from_ptr(name_);
 
                 match str::from_utf8(cstr.to_bytes()) {
-                    Ok(name) => match super::$hooks_ident::get_entry_by_name(name.to_string()) {
-                        Some(val) => {
-                            let mut buffer = CBuffer::new(buf as *mut libc::c_void, buflen);
-                            buffer.clear();
-
-                            match val.to_c_shadow(pwbuf, &mut buffer) {
-                                Err(e) => {
-                                    match e.raw_os_error() {
-                                       Some(e) =>{
-                                           *errnop = e;
-                                           NssStatus::TryAgain.to_c()
-                                       },
-                                       None => {
-                                           *errnop = libc::ENOENT;
-                                           NssStatus::Unavail.to_c()
-                                       }
-                                   }
-                                },
-                                Ok(_) => {
-                                    *errnop = 0;
-                                    NssStatus::Success.to_c()
-                                }
-                            }
-                        },
-                        None => NssStatus::NotFound.to_c()
-                    },
-                    Err(_) => NssStatus::NotFound.to_c()
-                }
+                    Ok(name) => super::$hooks_ident::get_entry_by_name(name.to_string()),
+                    Err(_) => Response::NotFound
+                }.to_c(result, buf, buflen, errnop) as c_int
             }
         }
     }
