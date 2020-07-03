@@ -210,6 +210,31 @@ macro_rules! libnss_host_hooks {
             }
 
             #[no_mangle]
+            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname3_r>](
+                name: *const libc::c_char,
+                family: libc::c_int,
+                result: *mut CHost,
+                buf: *mut libc::c_char,
+                buflen: libc::size_t,
+                errnop: *mut libc::c_int,
+                h_errnop: *mut libc::c_int,
+                ttlp: *mut i32,
+                canonp: *mut *const libc::c_char
+            ) -> libc::c_int {
+                let name2_res = [<_nss_ $mod_ident _gethostbyname2_r>](name, family, result, buf, buflen, errnop, h_errnop);
+
+                if ! ttlp.is_null() {
+                    *ttlp = 0;
+                }
+
+                if ! canonp.is_null() {
+                    *canonp = name;
+                }
+
+                name2_res
+            }
+
+            #[no_mangle]
             unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname2_r>](
                 name: *const libc::c_char,
                 family: libc::c_int,
@@ -244,6 +269,15 @@ macro_rules! libnss_host_hooks {
                         match status {
                             NssStatus::Success => {
                                 *h_errnop = Herrno::NetDbSuccess as i32
+                            }
+                            NssStatus::TryAgain => {
+                                *h_errnop = Herrno::TryAgain as i32
+                            }
+                            NssStatus::Unavail => {
+                                *h_errnop = Herrno::NoRecovery as i32
+                            }
+                            NssStatus::NotFound => {
+                                *h_errnop = Herrno::NoData as i32
                             }
                             _ => {
                                 *h_errnop = Herrno::NetDbInternal as i32
