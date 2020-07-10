@@ -7,6 +7,7 @@ pub trait ToC<C> {
 }
 
 #[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum NssStatus {
     TryAgain = -2,
     Unavail = -1,
@@ -15,6 +16,7 @@ pub enum NssStatus {
     Return = 2,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Response<R> {
     TryAgain,
     Unavail,
