@@ -192,6 +192,7 @@ libnss_initgroups_hooks!(hardcoded, HardcodedInitgroups);
 
 impl InitgroupsHooks for HardcodedInitgroups {
     fn get_entries_by_user(user: String) -> Response<Vec<Group>> {
+        let _ = user;
         Response::Success(vec![Group {
             name: "initgroup1".to_string(),
             passwd: "".to_string(),
@@ -201,6 +202,11 @@ impl InitgroupsHooks for HardcodedInitgroups {
             name: "initgroup2".to_string(),
             passwd: "".to_string(),
             gid: 3006,
+            members: vec!["someone".to_string()],
+        }, Group {
+            name: "initgroup3".to_string(),
+            passwd: "".to_string(),
+            gid: 3007,
             members: vec!["someone".to_string()],
         }])
     }

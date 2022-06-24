@@ -17,7 +17,7 @@ macro_rules! libnss_initgroups_hooks {
             use std::ffi::CStr;
             use std::mem;
             use std::slice;
-            use $crate::interop::{NssStatusm, Response};
+            use $crate::interop::{NssStatus, Response};
             use $crate::group::{CGroup, Group};
             use $crate::initgroups::InitgroupsHooks;
 
@@ -31,7 +31,7 @@ macro_rules! libnss_initgroups_hooks {
                 limit: libc::size_t,
                 errnop: *mut c_int,
             ) -> c_int {
-                let user = match str::from_utf8(CStr::from_ptr(name).to_bytes()) {
+                let user = match std::str::from_utf8(CStr::from_ptr(name).to_bytes()) {
                     Ok(x) => x.to_owned(),
                     Err(_) => {
                         *errnop = ENOENT;
@@ -55,7 +55,7 @@ macro_rules! libnss_initgroups_hooks {
                             Some(x.gid as libc::gid_t)
                         }
                     })
-                    .take(limit - *size)
+                    .take(limit - *start)
                     .collect::<Vec<libc::gid_t>>();
                 if groups.is_empty() {
                     return NssStatus::Success as c_int;
@@ -72,7 +72,7 @@ macro_rules! libnss_initgroups_hooks {
 
                 let group_array: &mut [libc::gid_t] = slice::from_raw_parts_mut(*groupsp, *size);
                 group_array[*start..*size].copy_from_slice(&groups);
-                *start = group_array.len() - 1;
+                *start = group_array.len();
 
                 NssStatus::Success as i32
             }
