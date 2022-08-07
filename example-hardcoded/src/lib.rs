@@ -6,6 +6,7 @@ extern crate libnss;
 
 use libnss::group::{Group, GroupHooks};
 use libnss::host::{AddressFamily, Addresses, Host, HostHooks};
+use libnss::initgroups::InitgroupsHooks;
 use libnss::interop::Response;
 use libnss::passwd::{Passwd, PasswdHooks};
 use libnss::shadow::{Shadow, ShadowHooks};
@@ -183,5 +184,30 @@ impl HostHooks for HardcodedHost {
         } else {
             Response::NotFound
         }
+    }
+}
+
+struct HardcodedInitgroups;
+libnss_initgroups_hooks!(hardcoded, HardcodedInitgroups);
+
+impl InitgroupsHooks for HardcodedInitgroups {
+    fn get_entries_by_user(user: String) -> Response<Vec<Group>> {
+        let _ = user;
+        Response::Success(vec![Group {
+            name: "initgroup1".to_string(),
+            passwd: "".to_string(),
+            gid: 3005,
+            members: vec!["someone".to_string()],
+        }, Group {
+            name: "initgroup2".to_string(),
+            passwd: "".to_string(),
+            gid: 3006,
+            members: vec!["someone".to_string()],
+        }, Group {
+            name: "initgroup3".to_string(),
+            passwd: "".to_string(),
+            gid: 3007,
+            members: vec!["someone".to_string()],
+        }])
     }
 }
