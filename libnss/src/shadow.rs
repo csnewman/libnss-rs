@@ -38,13 +38,13 @@ pub trait ShadowHooks {
 pub struct CShadow {
     pub name: *mut libc::c_char,
     pub passwd: *mut libc::c_char,
-    pub last_change: i64,
-    pub change_min_days: i64,
-    pub change_max_days: i64,
-    pub change_warn_days: i64,
-    pub change_inactive_days: i64,
-    pub expire_date: i64,
-    pub reserved: u64,
+    pub last_change: libc::c_long,
+    pub change_min_days: libc::c_long,
+    pub change_max_days: libc::c_long,
+    pub change_warn_days: libc::c_long,
+    pub change_inactive_days: libc::c_long,
+    pub expire_date: libc::c_long,
+    pub reserved: libc::c_ulong,
 }
 
 #[macro_export]
