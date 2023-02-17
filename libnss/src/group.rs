@@ -3,7 +3,7 @@ use crate::interop::{CBuffer, Response, ToC};
 pub struct Group {
     pub name: String,
     pub passwd: String,
-    pub gid: libc::gid_t,
+    pub gid: u32,
     pub members: Vec<String>,
 }
 

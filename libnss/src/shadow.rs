@@ -3,13 +3,13 @@ use crate::interop::{CBuffer, Response, ToC};
 pub struct Shadow {
     pub name: String,
     pub passwd: String,
-    pub last_change: i64,
-    pub change_min_days: i64,
-    pub change_max_days: i64,
-    pub change_warn_days: i64,
-    pub change_inactive_days: i64,
-    pub expire_date: i64,
-    pub reserved: u64,
+    pub last_change: isize,
+    pub change_min_days: isize,
+    pub change_max_days: isize,
+    pub change_warn_days: isize,
+    pub change_inactive_days: isize,
+    pub expire_date: isize,
+    pub reserved: usize,
 }
 
 impl ToC<CShadow> for Shadow {

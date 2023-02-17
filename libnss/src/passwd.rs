@@ -3,8 +3,8 @@ use crate::interop::{CBuffer, Response, ToC};
 pub struct Passwd {
     pub name: String,
     pub passwd: String,
-    pub uid: libc::uid_t,
-    pub gid: libc::gid_t,
+    pub uid: u32,
+    pub gid: u32,
     pub gecos: String,
     pub dir: String,
     pub shell: String,
