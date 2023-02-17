@@ -14,8 +14,8 @@ impl ToC<CPasswd> for Passwd {
     unsafe fn to_c(&self, result: *mut CPasswd, buffer: &mut CBuffer) -> std::io::Result<()> {
         (*result).name = buffer.write_str(&self.name)?;
         (*result).passwd = buffer.write_str(&self.passwd)?;
-        (*result).uid = self.uid;
-        (*result).gid = self.gid;
+        (*result).uid = self.uid as libc::uid_t;
+        (*result).gid = self.gid as libc::gid_t;
         (*result).gecos = buffer.write_str(&self.gecos)?;
         (*result).dir = buffer.write_str(&self.dir)?;
         (*result).shell = buffer.write_str(&self.shell)?;
