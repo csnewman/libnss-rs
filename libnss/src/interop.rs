@@ -158,7 +158,7 @@ impl CBuffer {
 
         // Write strings
         for s in strings {
-            *pos = self.write_str(s.as_ref())?;
+            pos.write(self.write_str(s.as_ref())?);
             pos = pos.offset(1);
         }
 
