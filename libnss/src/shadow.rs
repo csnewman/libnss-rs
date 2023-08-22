@@ -3,26 +3,26 @@ use crate::interop::{CBuffer, Response, ToC};
 pub struct Shadow {
     pub name: String,
     pub passwd: String,
-    pub last_change: i64,
-    pub change_min_days: i64,
-    pub change_max_days: i64,
-    pub change_warn_days: i64,
-    pub change_inactive_days: i64,
-    pub expire_date: i64,
-    pub reserved: u64,
+    pub last_change: isize,
+    pub change_min_days: isize,
+    pub change_max_days: isize,
+    pub change_warn_days: isize,
+    pub change_inactive_days: isize,
+    pub expire_date: isize,
+    pub reserved: usize,
 }
 
 impl ToC<CShadow> for Shadow {
     unsafe fn to_c(&self, result: *mut CShadow, buffer: &mut CBuffer) -> std::io::Result<()> {
         (*result).name = buffer.write_str(&self.name)?;
         (*result).passwd = buffer.write_str(&self.passwd)?;
-        (*result).last_change = self.last_change;
-        (*result).change_min_days = self.change_min_days;
-        (*result).change_max_days = self.change_max_days;
-        (*result).change_warn_days = self.change_warn_days;
-        (*result).change_inactive_days = self.change_inactive_days;
-        (*result).expire_date = self.expire_date;
-        (*result).reserved = self.reserved;
+        (*result).last_change = self.last_change as libc::c_long;
+        (*result).change_min_days = self.change_min_days as libc::c_long;
+        (*result).change_max_days = self.change_max_days as libc::c_long;
+        (*result).change_warn_days = self.change_warn_days as libc::c_long;
+        (*result).change_inactive_days = self.change_inactive_days as libc::c_long;
+        (*result).expire_date = self.expire_date as libc::c_long;
+        (*result).reserved = self.reserved as libc::c_ulong;
         Ok(())
     }
 }
@@ -38,13 +38,13 @@ pub trait ShadowHooks {
 pub struct CShadow {
     pub name: *mut libc::c_char,
     pub passwd: *mut libc::c_char,
-    pub last_change: i64,
-    pub change_min_days: i64,
-    pub change_max_days: i64,
-    pub change_warn_days: i64,
-    pub change_inactive_days: i64,
-    pub expire_date: i64,
-    pub reserved: u64,
+    pub last_change: libc::c_long,
+    pub change_min_days: libc::c_long,
+    pub change_max_days: libc::c_long,
+    pub change_warn_days: libc::c_long,
+    pub change_inactive_days: libc::c_long,
+    pub expire_date: libc::c_long,
+    pub reserved: libc::c_ulong,
 }
 
 #[macro_export]

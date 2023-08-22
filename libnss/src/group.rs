@@ -3,7 +3,7 @@ use crate::interop::{CBuffer, Response, ToC};
 pub struct Group {
     pub name: String,
     pub passwd: String,
-    pub gid: libc::gid_t,
+    pub gid: u32,
     pub members: Vec<String>,
 }
 
@@ -11,7 +11,7 @@ impl ToC<CGroup> for Group {
     unsafe fn to_c(&self, result: *mut CGroup, buffer: &mut CBuffer) -> std::io::Result<()> {
         (*result).name = buffer.write_str(&self.name)?;
         (*result).passwd = buffer.write_str(&self.passwd)?;
-        (*result).gid = self.gid;
+        (*result).gid = self.gid as libc::gid_t;
         (*result).members = buffer.write_strs(&self.members)?;
         Ok(())
     }
