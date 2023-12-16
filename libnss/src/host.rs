@@ -1,7 +1,7 @@
 use crate::interop::{CBuffer, Response, ToC};
 use std::mem;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-
+#[derive(Clone)]
 pub struct Host {
     pub name: String,
     pub aliases: Vec<String>,
@@ -14,7 +14,7 @@ pub enum AddressFamily {
     IPv6,
     Unspecified,
 }
-
+#[derive(Clone)]
 pub enum Addresses {
     V4(Vec<Ipv4Addr>),
     V6(Vec<Ipv6Addr>),
@@ -154,7 +154,11 @@ macro_rules! libnss_host_hooks {
             unsafe extern "C" fn [<_nss_ $mod_ident _gethostent_r>](result: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t,
                                                                   errnop: *mut c_int) -> c_int {
                 let mut iter: MutexGuard<Iterator<Host>> = [<HOST_ $mod_ident _ITERATOR>].lock().unwrap();
-                iter.next().to_c(result, buf, buflen, errnop) as c_int
+                let code: c_int = iter.next().to_c(result, buf, buflen, errnop) as c_int;
+                if code == NssStatus::TryAgain as c_int {
+                    iter.previous();
+                }
+                return code;
             }
 
             #[no_mangle]

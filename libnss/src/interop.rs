@@ -75,11 +75,12 @@ impl<R> Response<R> {
 
 pub struct Iterator<T> {
     items: Option<VecDeque<T>>,
+    index: usize,
 }
 
-impl<T> Iterator<T> {
+impl<T: Clone> Iterator<T> {
     pub fn new() -> Self {
-        Iterator { items: None }
+        Iterator { items: None, index: 0 }
     }
     pub fn open(&mut self, items: Vec<T>) -> NssStatus {
         self.items = Some(VecDeque::from(items));
@@ -87,12 +88,21 @@ impl<T> Iterator<T> {
     }
 
     pub fn next(&mut self) -> Response<T> {
-        match self.items {
-            Some(ref mut items) => match items.pop_front() {
-                Some(entity) => Response::Success(entity),
+        let response = match self.items {
+            Some(ref mut items) => match items.get(self.index) {
+                Some(entity) => Response::Success(entity.clone()),
                 None => Response::NotFound,
             },
             None => Response::Unavail,
+        };
+        self.index += 1;
+
+        return response;
+    }
+
+    pub fn previous(&mut self) {
+        if self.index > 0 {
+            self.index -= 1;
         }
     }
 

@@ -1,5 +1,5 @@
 use crate::interop::{CBuffer, Response, ToC};
-
+#[derive(Clone)]
 pub struct Shadow {
     pub name: String,
     pub passwd: String,
@@ -59,7 +59,7 @@ macro_rules! libnss_shadow_hooks {
             use std::ffi::CStr;
             use std::str;
             use std::sync::{Mutex, MutexGuard};
-            use $crate::interop::{CBuffer, Iterator, Response};
+            use $crate::interop::{CBuffer, Iterator, Response, NssStatus};
             use $crate::shadow::{CShadow, ShadowHooks, Shadow};
 
             lazy_static! {
@@ -90,7 +90,11 @@ macro_rules! libnss_shadow_hooks {
                 errnop: *mut c_int
             ) -> c_int {
                 let mut iter: MutexGuard<Iterator<Shadow>> = [<SHADOW_ $mod_ident _ITERATOR>].lock().unwrap();
-                iter.next().to_c(result, buf, buflen, errnop) as c_int
+                let code: c_int = iter.next().to_c(result, buf, buflen, errnop) as c_int;
+                if code == NssStatus::TryAgain as c_int {
+                    iter.previous();
+                }
+                return code;
             }
 
             #[no_mangle]
