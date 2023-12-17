@@ -84,6 +84,7 @@ impl<T: Clone> Iterator<T> {
     }
     pub fn open(&mut self, items: Vec<T>) -> NssStatus {
         self.items = Some(VecDeque::from(items));
+        self.index = 0;
         NssStatus::Success
     }
 
@@ -108,6 +109,7 @@ impl<T: Clone> Iterator<T> {
 
     pub fn close(&mut self) -> NssStatus {
         self.items = None;
+        self.index = 0;
         NssStatus::Success
     }
 }
