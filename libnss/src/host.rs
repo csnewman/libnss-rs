@@ -57,7 +57,7 @@ impl ToC<CHost> for Host {
                         addr_len as usize,
                     );
 
-                    *array_pos = ptr;
+                    array_pos.write(ptr);
                     array_pos = array_pos.offset(1);
                 }
             }
@@ -72,7 +72,7 @@ impl ToC<CHost> for Host {
                         addr_len as usize,
                     );
 
-                    *array_pos = ptr;
+                    array_pos.write(ptr);
                     array_pos = array_pos.offset(1);
                 }
             }
