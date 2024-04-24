@@ -1,7 +1,7 @@
 [package]
 name = "libnss"
 description = "Rust bindings for creating libnss modules"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Chandler Newman <chandler2newman@hotmail.co.uk>"]
 edition = "2018"
 readme = "README.md"
