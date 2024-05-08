@@ -137,7 +137,7 @@ macro_rules! libnss_host_hooks {
             #[no_mangle]
             extern "C" fn [<_nss_ $mod_ident _sethostent>]() -> c_int {
                 let mut iter: MutexGuard<Iterator<Host>> = [<HOST_ $mod_ident _ITERATOR>].lock().unwrap();
-                let status = match(super::$hooks_ident::get_all_entries()) {
+                let status = match(<super::$hooks_ident as HostHooks>::get_all_entries()) {
                     Response::Success(entries) => iter.open(entries),
                     response => response.to_status()
                 };
@@ -192,7 +192,7 @@ macro_rules! libnss_host_hooks {
                     }
                 };
 
-                match super::$hooks_ident::get_host_by_addr(a) {
+                match <super::$hooks_ident as HostHooks>::get_host_by_addr(a) {
                     response @ Response::Success(..) => {
                         *h_errnop = Herrno::NetDbSuccess as i32;
                         response
@@ -255,13 +255,13 @@ macro_rules! libnss_host_hooks {
                     Ok(name) => {
                         use super::$hooks_ident as hooks;
                         let status = match family {
-                            libc::AF_INET => hooks::get_host_by_name(&name.to_string(), AddressFamily::IPv4),
-                            libc::AF_INET6 => hooks::get_host_by_name(&name.to_string(), AddressFamily::IPv6),
+                            libc::AF_INET => <hooks as HostHooks>::get_host_by_name(&name.to_string(), AddressFamily::IPv4),
+                            libc::AF_INET6 => <hooks as HostHooks>::get_host_by_name(&name.to_string(), AddressFamily::IPv6),
 
                             // If unspecified, we are probably being called from gethostbyname_r so
                             // we will try IPv4 and if no results, then try IPv6
-                            libc::AF_UNSPEC => match hooks::get_host_by_name(&name.to_string(), AddressFamily::IPv4) {
-                                Response::NotFound => hooks::get_host_by_name(&name.to_string(), AddressFamily::IPv6),
+                            libc::AF_UNSPEC => match <hooks as HostHooks>::get_host_by_name(&name.to_string(), AddressFamily::IPv4) {
+                                Response::NotFound => <hooks as HostHooks>::get_host_by_name(&name.to_string(), AddressFamily::IPv6),
                                 val => val,
                             },
                             _ => {

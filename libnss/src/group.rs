@@ -57,7 +57,7 @@ macro_rules! libnss_group_hooks {
             #[no_mangle]
             extern "C" fn [<_nss_ $mod_ident _setgrent>]() -> c_int {
                 let mut iter: MutexGuard<Iterator<Group>> = [<GROUP_ $mod_ident _ITERATOR>].lock().unwrap();
-                let status = match(super::$hooks_ident::get_all_entries()) {
+                let status = match(<super::$hooks_ident as GroupHooks>::get_all_entries()) {
                     Response::Success(records) => iter.open(records),
                     response => response.to_status(),
                 };
@@ -93,7 +93,7 @@ macro_rules! libnss_group_hooks {
                 buflen: libc::size_t,
                 errnop: *mut c_int
             ) -> c_int {
-                super::$hooks_ident::get_entry_by_gid(uid).to_c(
+                <super::$hooks_ident as GroupHooks>::get_entry_by_gid(uid).to_c(
                     result,
                     buf,
                     buflen,
@@ -112,7 +112,7 @@ macro_rules! libnss_group_hooks {
                 let cstr = CStr::from_ptr(name_);
 
                 match str::from_utf8(cstr.to_bytes()) {
-                    Ok(name) => super::$hooks_ident::get_entry_by_name(name.to_string()),
+                    Ok(name) => <super::$hooks_ident as GroupHooks>::get_entry_by_name(name.to_string()),
                     Err(_) => Response::NotFound
                 }.to_c(result, buf, buflen, errnop) as c_int
             }

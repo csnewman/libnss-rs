@@ -39,7 +39,7 @@ macro_rules! libnss_initgroups_hooks {
                     }
                 };
 
-                let groups: Vec<Group> = match super::$hooks_ident::get_entries_by_user(user) {
+                let groups: Vec<Group> = match <super::$hooks_ident as InitgroupsHooks>::get_entries_by_user(user) {
                     Response::Success(records) => records,
                     response => {
                         *errnop = ENOENT;
