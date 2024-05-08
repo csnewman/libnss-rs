@@ -38,7 +38,7 @@ pub struct CGroup {
 #[macro_export]
 macro_rules! libnss_group_hooks {
 ($mod_ident:ident, $hooks_ident:ident) => (
-    paste::item! {
+    $crate::_macro_internal::paste! {
         pub use self::[<libnss_group_ $mod_ident _hooks_impl>]::*;
         mod [<libnss_group_ $mod_ident _hooks_impl>] {
             #![allow(non_upper_case_globals)]
@@ -50,7 +50,7 @@ macro_rules! libnss_group_hooks {
             use $crate::interop::{CBuffer, Iterator, Response, NssStatus};
             use $crate::group::{CGroup, GroupHooks, Group};
 
-            lazy_static! {
+            $crate::_macro_internal::lazy_static! {
             static ref [<GROUP_ $mod_ident _ITERATOR>]: Mutex<Iterator<Group>> = Mutex::new(Iterator::<Group>::new());
             }
 

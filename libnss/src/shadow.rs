@@ -50,7 +50,7 @@ pub struct CShadow {
 #[macro_export]
 macro_rules! libnss_shadow_hooks {
 ($mod_ident:ident, $hooks_ident:ident) => (
-    paste::item! {
+    $crate::_macro_internal::paste! {
         pub use self::[<libnss_shadow_ $mod_ident _hooks_impl>]::*;
         mod [<libnss_shadow_ $mod_ident _hooks_impl>] {
             #![allow(non_upper_case_globals)]
@@ -62,7 +62,7 @@ macro_rules! libnss_shadow_hooks {
             use $crate::interop::{CBuffer, Iterator, Response, NssStatus};
             use $crate::shadow::{CShadow, ShadowHooks, Shadow};
 
-            lazy_static! {
+            $crate::_macro_internal::lazy_static! {
             static ref [<SHADOW_ $mod_ident _ITERATOR>]: Mutex<Iterator<Shadow>> = Mutex::new(Iterator::<Shadow>::new());
             }
 

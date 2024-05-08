@@ -1,15 +1,13 @@
-extern crate libc;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate libnss;
-
 use libnss::group::{Group, GroupHooks};
 use libnss::host::{AddressFamily, Addresses, Host, HostHooks};
 use libnss::initgroups::InitgroupsHooks;
 use libnss::interop::Response;
 use libnss::passwd::{Passwd, PasswdHooks};
 use libnss::shadow::{Shadow, ShadowHooks};
+use libnss::{
+    libnss_group_hooks, libnss_host_hooks, libnss_initgroups_hooks, libnss_passwd_hooks,
+    libnss_shadow_hooks,
+};
 
 struct HardcodedPasswd;
 libnss_passwd_hooks!(hardcoded, HardcodedPasswd);

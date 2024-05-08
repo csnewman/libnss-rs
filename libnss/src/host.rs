@@ -108,7 +108,7 @@ pub struct CHost {
 #[macro_export]
 macro_rules! libnss_host_hooks {
 ($mod_ident:ident, $hooks_ident:ident) => (
-    paste::item! {
+    $crate::_macro_internal::paste! {
         pub use self::[<libnss_host_ $mod_ident _hooks_impl>]::*;
         mod [<libnss_host_ $mod_ident _hooks_impl>] {
             #![allow(non_upper_case_globals)]
@@ -130,7 +130,7 @@ macro_rules! libnss_host_hooks {
                 NoData = 4,
             }
 
-            lazy_static! {
+            $crate::_macro_internal::lazy_static! {
             static ref [<HOST_ $mod_ident _ITERATOR>]: Mutex<Iterator<Host>> = Mutex::new(Iterator::<Host>::new());
             }
 

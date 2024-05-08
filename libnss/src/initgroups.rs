@@ -8,7 +8,7 @@ pub trait InitgroupsHooks {
 #[macro_export]
 macro_rules! libnss_initgroups_hooks {
 ($mod_ident:ident, $hooks_ident:ident) => (
-    paste::item! {
+    $crate::_macro_internal::paste! {
         pub use self::[<libnss_initgroups_ $mod_ident _hooks_impl>]::*;
         mod [<libnss_initgroups_ $mod_ident _hooks_impl>] {
             #![allow(non_upper_case_globals)]
