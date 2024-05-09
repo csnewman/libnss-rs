@@ -28,25 +28,14 @@ crate-type = [ "cdylib" ]
 ```yaml
 [dependencies]
 libc = "0.2.0"
-lazy_static = "1.3.0"
-paste = "0.1"
-libnss = "0.1.0"
-```
-
-- Add the following to your ```src/main.rs```
-
-```rust
-extern crate libc;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate libnss;
+libnss = "0.7.0"
 ```
 
 - Implement a ```passwd``` database
 
 ```rust
 use libnss::passwd::{PasswdHooks, Passwd};
+use libnss::libnss_passwd_hooks;
 
 struct ExamplePasswd;
 libnss_passwd_hooks!(example, ExamplePasswd);
