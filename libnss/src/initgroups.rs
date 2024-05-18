@@ -8,7 +8,7 @@ pub trait InitgroupsHooks {
 #[macro_export]
 macro_rules! libnss_initgroups_hooks {
 ($mod_ident:ident, $hooks_ident:ident) => (
-    paste::item! {
+    $crate::_macro_internal::paste! {
         pub use self::[<libnss_initgroups_ $mod_ident _hooks_impl>]::*;
         mod [<libnss_initgroups_ $mod_ident _hooks_impl>] {
             #![allow(non_upper_case_globals)]
@@ -39,7 +39,7 @@ macro_rules! libnss_initgroups_hooks {
                     }
                 };
 
-                let groups: Vec<Group> = match super::$hooks_ident::get_entries_by_user(user) {
+                let groups: Vec<Group> = match <super::$hooks_ident as InitgroupsHooks>::get_entries_by_user(user) {
                     Response::Success(records) => records,
                     response => {
                         *errnop = ENOENT;

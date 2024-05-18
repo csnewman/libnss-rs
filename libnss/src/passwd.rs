@@ -47,7 +47,7 @@ pub struct CPasswd {
 #[macro_export]
 macro_rules! libnss_passwd_hooks {
 ($mod_ident:ident, $hooks_ident:ident) => (
-    paste::item! {
+    $crate::_macro_internal::paste! {
         pub use self::[<libnss_passwd_ $mod_ident _hooks_impl>]::*;
         mod [<libnss_passwd_ $mod_ident _hooks_impl>] {
             #![allow(non_upper_case_globals)]
@@ -59,7 +59,7 @@ macro_rules! libnss_passwd_hooks {
             use $crate::interop::{CBuffer, Iterator, Response, NssStatus};
             use $crate::passwd::{CPasswd, Passwd, PasswdHooks};
 
-            lazy_static! {
+            $crate::_macro_internal::lazy_static! {
             static ref [<PASSWD_ $mod_ident _ITERATOR>]: Mutex<Iterator<Passwd>> = Mutex::new(Iterator::<Passwd>::new());
             }
 
@@ -67,7 +67,7 @@ macro_rules! libnss_passwd_hooks {
             extern "C" fn [<_nss_ $mod_ident _setpwent>]() -> c_int {
                 let mut iter: MutexGuard<Iterator<Passwd>> = [<PASSWD_ $mod_ident _ITERATOR>].lock().unwrap();
 
-                let status = match(super::$hooks_ident::get_all_entries()) {
+                let status = match(<super::$hooks_ident as PasswdHooks>::get_all_entries()) {
                     Response::Success(entries) => iter.open(entries),
                     response => response.to_status()
                 };
@@ -104,7 +104,7 @@ macro_rules! libnss_passwd_hooks {
                 buflen: libc::size_t,
                 errnop: *mut c_int
             ) -> c_int {
-                super::$hooks_ident::get_entry_by_uid(uid).to_c(result, buf, buflen, errnop) as c_int
+                <super::$hooks_ident as PasswdHooks>::get_entry_by_uid(uid).to_c(result, buf, buflen, errnop) as c_int
             }
 
             #[no_mangle]
@@ -118,7 +118,7 @@ macro_rules! libnss_passwd_hooks {
                 let cstr = CStr::from_ptr(name_);
 
                 let response = match str::from_utf8(cstr.to_bytes()) {
-                    Ok(name) => super::$hooks_ident::get_entry_by_name(name.to_string()),
+                    Ok(name) => <super::$hooks_ident as PasswdHooks>::get_entry_by_name(name.to_string()),
                     Err(_) => Response::NotFound
                 };
 
