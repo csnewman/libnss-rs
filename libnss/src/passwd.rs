@@ -39,9 +39,17 @@ pub struct CPasswd {
     pub passwd: *mut libc::c_char,
     pub uid: libc::uid_t,
     pub gid: libc::gid_t,
+    #[cfg(target_os = "freebsd")]
+    pub pw_change: libc::time_t,
+    #[cfg(target_os = "freebsd")]
+    pub pw_class: *mut libc::c_char,
     pub gecos: *mut libc::c_char,
     pub dir: *mut libc::c_char,
     pub shell: *mut libc::c_char,
+    #[cfg(target_os = "freebsd")]
+    pub pw_expire: libc::time_t,
+    #[cfg(target_os = "freebsd")]
+    pub pw_fields: i32
 }
 
 #[macro_export]
