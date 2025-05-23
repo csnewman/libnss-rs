@@ -136,9 +136,8 @@ macro_rules! libnss_host_hooks {
 
             #[no_mangle]
             extern "C" fn [<_nss_ $mod_ident _sethostent>]() -> c_int {
-                let mut iter: MutexGuard<Iterator<Host>> = [<HOST_ $mod_ident _ITERATOR>].lock().unwrap();
                 let status = match(<super::$hooks_ident as HostHooks>::get_all_entries()) {
-                    Response::Success(entries) => iter.open(entries),
+                    Response::Success(entries) => [<HOST_ $mod_ident _ITERATOR>].lock().unwrap().open(entries),
                     response => response.to_status()
                 };
                 status as c_int
@@ -153,11 +152,14 @@ macro_rules! libnss_host_hooks {
             #[no_mangle]
             unsafe extern "C" fn [<_nss_ $mod_ident _gethostent_r>](result: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t,
                                                                   errnop: *mut c_int) -> c_int {
-                let mut iter: MutexGuard<Iterator<Host>> = [<HOST_ $mod_ident _ITERATOR>].lock().unwrap();
-                let code: c_int = iter.next().to_c(result, buf, buflen, errnop) as c_int;
-                if code == NssStatus::TryAgain as c_int {
-                    iter.previous();
-                }
+                let code = {
+                    let mut iter: MutexGuard<Iterator<Host>> = [<HOST_ $mod_ident _ITERATOR>].lock().unwrap();
+                    let code: c_int = iter.next().to_c(result, buf, buflen, errnop) as c_int;
+                    if code == NssStatus::TryAgain as c_int {
+                        iter.previous();
+                    }
+                    code
+                };
                 return code;
             }
 
