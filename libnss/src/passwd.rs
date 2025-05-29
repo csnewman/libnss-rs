@@ -97,7 +97,7 @@ macro_rules! libnss_passwd_hooks {
                 errnop: *mut c_int
             ) -> c_int {
                 let mut iter: MutexGuard<Iterator<Passwd>> = [<PASSWD_ $mod_ident _ITERATOR>].lock().unwrap();
-                let code: c_int = iter.next().to_c(result, buf, buflen, errnop) as c_int;
+                let code: c_int = iter.next().to_c(result, buf, buflen, Some(errnop)) as c_int;
                 if code == NssStatus::TryAgain as c_int {
                     iter.previous();
                 }
@@ -112,7 +112,7 @@ macro_rules! libnss_passwd_hooks {
                 buflen: libc::size_t,
                 errnop: *mut c_int
             ) -> c_int {
-                <super::$hooks_ident as PasswdHooks>::get_entry_by_uid(uid).to_c(result, buf, buflen, errnop) as c_int
+                <super::$hooks_ident as PasswdHooks>::get_entry_by_uid(uid).to_c(result, buf, buflen, Some(errnop)) as c_int
             }
 
             #[no_mangle]
@@ -130,7 +130,7 @@ macro_rules! libnss_passwd_hooks {
                     Err(_) => Response::NotFound
                 };
 
-                response.to_c(result, buf, buflen, errnop) as c_int
+                response.to_c(result, buf, buflen, Some(errnop)) as c_int
             }
         }
     }

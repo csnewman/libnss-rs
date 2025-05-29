@@ -3,6 +3,7 @@ pub mod host;
 pub mod initgroups;
 pub mod interop;
 pub mod passwd;
+pub mod service;
 pub mod shadow;
 
 /// Re-exports for use by macros

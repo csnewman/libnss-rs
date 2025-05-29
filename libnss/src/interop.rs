@@ -42,7 +42,7 @@ impl<R> Response<R> {
         result: *mut C,
         buf: *mut libc::c_char,
         buflen: libc::size_t,
-        errnop: *mut libc::c_int,
+        errnop: Option<*mut libc::c_int>,
     ) -> NssStatus
     where
         R: ToC<C>,
@@ -53,16 +53,22 @@ impl<R> Response<R> {
 
             match entity.to_c(result, &mut buffer) {
                 Ok(()) => {
-                    *errnop = 0;
+                    if let Some(errnop) = errnop {
+                        *errnop = 0;
+                    }
                     self.to_status()
                 }
                 Err(e) => match e.raw_os_error() {
                     Some(e) => {
-                        *errnop = e;
+                        if let Some(errnop) = errnop {
+                            *errnop = e;
+                        }
                         Self::TryAgain.to_status()
                     }
                     None => {
-                        *errnop = libc::ENOENT;
+                        if let Some(errnop) = errnop {
+                            *errnop = libc::ENOENT;
+                        }
                         Self::Unavail.to_status()
                     }
                 },

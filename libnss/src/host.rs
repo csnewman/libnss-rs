@@ -154,7 +154,7 @@ macro_rules! libnss_host_hooks {
             unsafe extern "C" fn [<_nss_ $mod_ident _gethostent_r>](result: *mut CHost, buf: *mut libc::c_char, buflen: libc::size_t,
                                                                   errnop: *mut c_int) -> c_int {
                 let mut iter: MutexGuard<Iterator<Host>> = [<HOST_ $mod_ident _ITERATOR>].lock().unwrap();
-                let code: c_int = iter.next().to_c(result, buf, buflen, errnop) as c_int;
+                let code: c_int = iter.next().to_c(result, buf, buflen, Some(errnop)) as c_int;
                 if code == NssStatus::TryAgain as c_int {
                     iter.previous();
                 }
@@ -198,7 +198,7 @@ macro_rules! libnss_host_hooks {
                         response
                     },
                     response => response
-                }.to_c(result, buf, buflen, errnop) as c_int
+                }.to_c(result, buf, buflen, Some(errnop)) as c_int
             }
 
             #[no_mangle]
@@ -268,7 +268,7 @@ macro_rules! libnss_host_hooks {
                                 *h_errnop = Herrno::NoRecovery as i32;
                                 Response::Unavail
                             },
-                        }.to_c(result, buf, buflen, errnop);
+                        }.to_c(result, buf, buflen, Some(errnop));
 
                         match status {
                             NssStatus::Success => {

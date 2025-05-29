@@ -6,6 +6,7 @@ Currently supports the following databases:
 - shadow
 - group
 - hosts
+- services
 
 ## Getting started
 - Create a new library
