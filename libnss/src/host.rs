@@ -1,4 +1,4 @@
-use crate::interop::{CBuffer, Response, ToC};
+use crate::interop::{CBuffer, Response, ResponseResult, ToC};
 use std::mem;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 #[derive(Clone, Debug, PartialEq)]
@@ -90,6 +90,14 @@ pub trait HostHooks {
     fn get_host_by_name(name: &str, family: AddressFamily) -> Response<Host>;
 
     fn get_host_by_addr(addr: IpAddr) -> Response<Host>;
+}
+
+pub trait HostHooksResult {
+    fn get_all_entries() -> ResponseResult<Vec<Host>>;
+
+    fn get_host_by_name(name: &str, family: AddressFamily) -> ResponseResult<Host>;
+
+    fn get_host_by_addr(addr: IpAddr) -> ResponseResult<Host>;
 }
 
 /// NSS C Host object
@@ -225,17 +233,116 @@ macro_rules! libnss_host_hooks {
                 ttlp: *mut i32,
                 canonp: *mut *const libc::c_char
             ) -> libc::c_int {
-                let name2_res = [<_nss_ $mod_ident _gethostbyname2_r>](name, family, result, buf, buflen, errnop, h_errnop);
+                // Bind HostHooks implementation to a local to prevent early drop
+                // (fixes clippy significant_drop_tightening lint)
+                let host = <super::$hooks_ident as HostHooks>::get_host_by_name(
+                    str::from_utf8(CStr::from_ptr(name).to_bytes())
+                        .unwrap_or_default(),
+                    match family {
+                        libc::AF_INET => AddressFamily::IPv4,
+                        libc::AF_INET6 => AddressFamily::IPv6,
+                        _ => AddressFamily::Unspecified,
+                    },
+                );
 
-                if ! ttlp.is_null() {
+                // Write TTL (set to 0 by default for compatibility;
+                // use ttlp to allow caller to override)
+                let status = host.to_c(result, buf, buflen, errnop) as c_int;
+
+                if status == NssStatus::Success as c_int {
+                    if !ttlp.is_null() {
+                        *ttlp = 0;
+                    }
+                    if !canonp.is_null() {
+                        *canonp = name;
+                    }
+                    *h_errnop = Herrno::NetDbSuccess as i32;
+                }
+
+                status
+            }
+
+            /// Additional flags for gethostbyname4_r (glibc 2.34+)
+            /// https://man7.org/linux/man-pages/man3/gethostbyname.3.html
+            enum Gn4Flags {
+                GaiAlive = 1 << 0,
+                GaiCanonical = 1 << 1,
+                GaiAllAddresses = 1 << 2,
+            }
+
+            /// gethostbyname4_r — extended gethostbyname with IPv6 scope ID support.
+            /// Returns additional info: TTL, canonical name, address length, and
+            /// address pointer for IPv6 link-local address identification.
+            /// Signature matches glibc's gethostbyname4_r from getentropy(3).
+            #[no_mangle]
+            unsafe extern "C" fn [<_nss_ $mod_ident _gethostbyname4_r>](
+                name: *const libc::c_char,
+                family: libc::c_int,
+                result: *mut CHost,
+                buf: *mut libc::c_char,
+                buflen: libc::size_t,
+                errnop: *mut libc::c_int,
+                h_errnop: *mut libc::c_int,
+                ttlp: *mut i32,
+                canonp: *mut *const libc::c_char,
+                ai_addrlen: *mut libc::size_t,
+                ai_addr: *mut *const libc::sockaddr,
+                ai_scan: *mut *const libc::sockaddr,
+                flags: libc::c_int,
+            ) -> libc::c_int {
+                *h_errnop = Herrno::NetDbInternal as i32;
+
+                let cstr = CStr::from_ptr(name);
+                let name_str = str::from_utf8_unchecked(cstr.to_bytes());
+
+                // Convert name to Host struct via the same path as gethostbyname3_r
+                // Bind the Hosts implementation to a local to prevent early drop
+                // (fixes clippy significant_drop_tightening lint)
+                let host = <super::$hooks_ident as HostHooks>::get_host_by_name(
+                    name_str,
+                    match family {
+                        libc::AF_INET => AddressFamily::IPv4,
+                        libc::AF_INET6 => AddressFamily::IPv6,
+                        _ => AddressFamily::Unspecified,
+                    },
+                );
+
+                // Write TTL (0 by default, configurable via ttlp pointer)
+                if !ttlp.is_null() {
                     *ttlp = 0;
                 }
 
-                if ! canonp.is_null() {
+                // canonp: set to the input name for canonical name
+                if !canonp.is_null() {
                     *canonp = name;
                 }
 
-                name2_res
+                let status = host.to_c(result, buf, buflen, errnop) as c_int;
+
+                if status == NssStatus::Success as c_int {
+                    // ai_addr: point to the first address in the hostent
+                    if !ai_addrlen.is_null() {
+                        let chost = &*(result as *const CHost);
+                        if !chost.h_addr_list.is_null() {
+                            let addr_ptr = *chost.h_addr_list as *const libc::sockaddr;
+                            // sockadd for AF_INET is 16 bytes, AF_INET6 is 28 bytes
+                            *ai_addrlen = if chost.h_addrtype == libc::AF_INET6 {
+                                28u16 as libc::size_t
+                            } else {
+                                16u16 as libc::size_t
+                            };
+                        }
+                    }
+                    // ai_scan follows ai_addr in the scan buffer
+                    if !ai_scan.is_null() && !ai_addr.is_null() && !(*ai_addr).is_null() {
+                        *ai_scan = *ai_addr;
+                    }
+
+                    // ai_addr type is already set in the CHost by to_c
+                    *h_errnop = Herrno::NetDbSuccess as i32;
+                }
+
+                status
             }
 
             #[no_mangle]

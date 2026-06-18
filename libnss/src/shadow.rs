@@ -1,4 +1,4 @@
-use crate::interop::{CBuffer, Response, ToC};
+use crate::interop::{CBuffer, Response, ResponseResult, ToC};
 #[derive(Clone)]
 pub struct Shadow {
     pub name: String,
@@ -31,6 +31,12 @@ pub trait ShadowHooks {
     fn get_all_entries() -> Response<Vec<Shadow>>;
 
     fn get_entry_by_name(name: String) -> Response<Shadow>;
+}
+
+pub trait ShadowHooksResult {
+    fn get_all_entries() -> ResponseResult<Vec<Shadow>>;
+
+    fn get_entry_by_name(name: String) -> ResponseResult<Shadow>;
 }
 
 #[repr(C)]

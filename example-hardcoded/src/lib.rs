@@ -1,9 +1,9 @@
-use libnss::group::{Group, GroupHooks};
-use libnss::host::{AddressFamily, Addresses, Host, HostHooks};
-use libnss::initgroups::InitgroupsHooks;
-use libnss::interop::Response;
-use libnss::passwd::{Passwd, PasswdHooks};
-use libnss::shadow::{Shadow, ShadowHooks};
+use libnss::group::{Group, GroupHooks, GroupHooksResult};
+use libnss::host::{AddressFamily, Addresses, Host, HostHooks, HostHooksResult};
+use libnss::initgroups::{InitgroupsHooks, InitgroupsHooksResult};
+use libnss::interop::{NssStatus, Response, ResponseResult};
+use libnss::passwd::{Passwd, PasswdHooks, PasswdHooksResult};
+use libnss::shadow::{Shadow, ShadowHooks, ShadowHooksResult};
 use libnss::{
     libnss_group_hooks, libnss_host_hooks, libnss_initgroups_hooks, libnss_passwd_hooks,
     libnss_shadow_hooks,
@@ -60,6 +60,52 @@ impl PasswdHooks for HardcodedPasswd {
     }
 }
 
+impl PasswdHooksResult for HardcodedPasswd {
+    fn get_all_entries() -> ResponseResult<Vec<Passwd>> {
+        Ok(vec![Passwd {
+            name: "test".to_string(),
+            passwd: "x".to_string(),
+            uid: 1005,
+            gid: 1005,
+            gecos: "Test Account".to_string(),
+            dir: "/home/test".to_string(),
+            shell: "/bin/bash".to_string(),
+        }])
+    }
+
+    fn get_entry_by_uid(uid: libc::uid_t) -> ResponseResult<Passwd> {
+        if uid == 1005 {
+            Ok(Passwd {
+                name: "test".to_string(),
+                passwd: "x".to_string(),
+                uid: 1005,
+                gid: 1005,
+                gecos: "Test Account".to_string(),
+                dir: "/home/test".to_string(),
+                shell: "/bin/bash".to_string(),
+            })
+        } else {
+            Err(NssStatus::NotFound)
+        }
+    }
+
+    fn get_entry_by_name(name: String) -> ResponseResult<Passwd> {
+        if name == "test" {
+            Ok(Passwd {
+                name: "test".to_string(),
+                passwd: "x".to_string(),
+                uid: 1005,
+                gid: 1005,
+                gecos: "Test Account".to_string(),
+                dir: "/home/test".to_string(),
+                shell: "/bin/bash".to_string(),
+            })
+        } else {
+            Err(NssStatus::NotFound)
+        }
+    }
+}
+
 struct HardcodedGroup;
 libnss_group_hooks!(hardcoded, HardcodedGroup);
 
@@ -97,6 +143,43 @@ impl GroupHooks for HardcodedGroup {
         }
 
         Response::NotFound
+    }
+}
+
+impl GroupHooksResult for HardcodedGroup {
+    fn get_all_entries() -> ResponseResult<Vec<Group>> {
+        Ok(vec![Group {
+            name: "test".to_string(),
+            passwd: "".to_string(),
+            gid: 1005,
+            members: vec!["someone".to_string()],
+        }])
+    }
+
+    fn get_entry_by_gid(gid: libc::gid_t) -> ResponseResult<Group> {
+        if gid == 1005 {
+            Ok(Group {
+                name: "test".to_string(),
+                passwd: "".to_string(),
+                gid: 1005,
+                members: vec!["someone".to_string()],
+            })
+        } else {
+            Err(NssStatus::NotFound)
+        }
+    }
+
+    fn get_entry_by_name(name: String) -> ResponseResult<Group> {
+        if name == "test" {
+            Ok(Group {
+                name: "test".to_string(),
+                passwd: "".to_string(),
+                gid: 1005,
+                members: vec!["someone".to_string()],
+            })
+        } else {
+            Err(NssStatus::NotFound)
+        }
     }
 }
 
@@ -138,6 +221,42 @@ impl ShadowHooks for HardcodedShadow {
         }
 
         Response::NotFound
+    }
+}
+
+impl ShadowHooksResult for HardcodedShadow {
+    fn get_all_entries() -> ResponseResult<Vec<Shadow>> {
+        Ok(vec![
+            Shadow {
+                name: "test".to_string(),
+                passwd: "$6$KEnq4G3CxkA2iU$l/BBqPJlzPvXDfa9ZQ2wUM4fr9CluB.65MLVhLxhjv1jVluZphzY1J6EBtxEa5/n4IDqamJ5cvvek3CtXNYSm1".to_string(),
+                last_change: 0,
+                change_min_days: 0,
+                change_max_days: 99999,
+                change_warn_days: 7,
+                change_inactive_days: -1,
+                expire_date: -1,
+                reserved: 0,
+            }
+        ])
+    }
+
+    fn get_entry_by_name(name: String) -> ResponseResult<Shadow> {
+        if name == "test" {
+            Ok(Shadow {
+                name: "test".to_string(),
+                passwd: "$6$KEnq4G3CxkA2iU$l/BBqPJlzPvXDfa9ZQ2wUM4fr9CluB.65MLVhLxhjv1jVluZphzY1J6EBtxEa5/n4IDqamJ5cvvek3CtXNYSm1".to_string(),
+                last_change: 0,
+                change_min_days: 0,
+                change_max_days: 99999,
+                change_warn_days: 7,
+                change_inactive_days: -1,
+                expire_date: -1,
+                reserved: 0,
+            })
+        } else {
+            Err(NssStatus::NotFound)
+        }
     }
 }
 
@@ -185,6 +304,45 @@ impl HostHooks for HardcodedHost {
     }
 }
 
+impl HostHooksResult for HardcodedHost {
+    fn get_all_entries() -> ResponseResult<Vec<Host>> {
+        Ok(vec![Host {
+            name: "test.example".to_string(),
+            addresses: Addresses::V4(vec![Ipv4Addr::new(177, 42, 42, 42)]),
+            aliases: vec!["other.example".to_string()],
+        }])
+    }
+
+    fn get_host_by_addr(addr: IpAddr) -> ResponseResult<Host> {
+        match addr {
+            IpAddr::V4(addr) => {
+                if addr.octets() == [177, 42, 42, 42] {
+                    Ok(Host {
+                        name: "test.example".to_string(),
+                        addresses: Addresses::V4(vec![Ipv4Addr::new(177, 42, 42, 42)]),
+                        aliases: vec!["other.example".to_string()],
+                    })
+                } else {
+                    Err(NssStatus::NotFound)
+                }
+            }
+            _ => Err(NssStatus::NotFound),
+        }
+    }
+
+    fn get_host_by_name(name: &str, family: AddressFamily) -> ResponseResult<Host> {
+        if name.ends_with(".example") && family == AddressFamily::IPv4 {
+            Ok(Host {
+                name: name.to_string(),
+                addresses: Addresses::V4(vec![Ipv4Addr::new(177, 42, 42, 42)]),
+                aliases: vec!["test.example".to_string(), "other.example".to_string()],
+            })
+        } else {
+            Err(NssStatus::NotFound)
+        }
+    }
+}
+
 struct HardcodedInitgroups;
 libnss_initgroups_hooks!(hardcoded, HardcodedInitgroups);
 
@@ -192,6 +350,32 @@ impl InitgroupsHooks for HardcodedInitgroups {
     fn get_entries_by_user(user: String) -> Response<Vec<Group>> {
         let _ = user;
         Response::Success(vec![
+            Group {
+                name: "initgroup1".to_string(),
+                passwd: "".to_string(),
+                gid: 3005,
+                members: vec!["someone".to_string()],
+            },
+            Group {
+                name: "initgroup2".to_string(),
+                passwd: "".to_string(),
+                gid: 3006,
+                members: vec!["someone".to_string()],
+            },
+            Group {
+                name: "initgroup3".to_string(),
+                passwd: "".to_string(),
+                gid: 3007,
+                members: vec!["someone".to_string()],
+            },
+        ])
+    }
+}
+
+impl InitgroupsHooksResult for HardcodedInitgroups {
+    fn get_entries_by_user(user: String) -> ResponseResult<Vec<Group>> {
+        let _ = user;
+        Ok(vec![
             Group {
                 name: "initgroup1".to_string(),
                 passwd: "".to_string(),

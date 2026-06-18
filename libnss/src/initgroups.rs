@@ -1,8 +1,12 @@
 use crate::group::Group;
-use crate::interop::Response;
+use crate::interop::{Response, ResponseResult};
 
 pub trait InitgroupsHooks {
     fn get_entries_by_user(user: String) -> Response<Vec<Group>>;
+}
+
+pub trait InitgroupsHooksResult {
+    fn get_entries_by_user(user: String) -> ResponseResult<Vec<Group>>;
 }
 
 #[macro_export]

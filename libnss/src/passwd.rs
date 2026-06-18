@@ -1,4 +1,4 @@
-use crate::interop::{CBuffer, Response, ToC};
+use crate::interop::{CBuffer, Response, ResponseResult, ToC};
 
 #[derive(Clone)]
 pub struct Passwd {
@@ -30,6 +30,14 @@ pub trait PasswdHooks {
     fn get_entry_by_uid(uid: libc::uid_t) -> Response<Passwd>;
 
     fn get_entry_by_name(name: String) -> Response<Passwd>;
+}
+
+pub trait PasswdHooksResult {
+    fn get_all_entries() -> ResponseResult<Vec<Passwd>>;
+
+    fn get_entry_by_uid(uid: libc::uid_t) -> ResponseResult<Passwd>;
+
+    fn get_entry_by_name(name: String) -> ResponseResult<Passwd>;
 }
 
 #[repr(C)]

@@ -3,6 +3,9 @@ use std::ffi::CString;
 use std::io;
 
 pub trait ToC<C> {
+    /// # Safety
+    /// - `result` must point to a valid mutable C struct of type `C`
+    /// - `buffer` must point to valid writable memory of at least `buflen` bytes
     unsafe fn to_c(&self, result: *mut C, buffer: &mut CBuffer) -> std::io::Result<()>;
 }
 
@@ -25,6 +28,21 @@ pub enum Response<R> {
     Return,
 }
 
+// Alias for the new Result-based API
+pub type ResponseResult<R> = Result<R, NssStatus>;
+
+impl NssStatus {
+    pub fn into_result<T>(self, value: T) -> ResponseResult<T> {
+        match self {
+            NssStatus::Success => Ok(value),
+            NssStatus::TryAgain => Err(NssStatus::TryAgain),
+            NssStatus::Unavail => Err(NssStatus::Unavail),
+            NssStatus::NotFound => Err(NssStatus::NotFound),
+            NssStatus::Return => Err(NssStatus::Return),
+        }
+    }
+}
+
 impl<R> Response<R> {
     pub fn to_status(&self) -> NssStatus {
         use NssStatus::*;
@@ -37,6 +55,10 @@ impl<R> Response<R> {
         }
     }
 
+    /// # Safety
+    /// - `result` must point to a valid mutable C struct
+    /// - `buf` must point to valid writable memory of at least `buflen` bytes
+    /// - `errnop` must point to a valid writable `c_int`
     pub unsafe fn to_c<C>(
         &self,
         result: *mut C,
@@ -73,9 +95,17 @@ impl<R> Response<R> {
     }
 }
 
+/// Thread-safe iterator over entries for NSS set*/get* pattern.
+/// Uses a `Mutex`-protected `lazy_static` so concurrent NSS calls don't clobber each other.
 pub struct Iterator<T> {
     items: Option<VecDeque<T>>,
     index: usize,
+}
+
+impl<T: Clone> Default for Iterator<T> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T: Clone> Iterator<T> {
@@ -88,6 +118,9 @@ impl<T: Clone> Iterator<T> {
         NssStatus::Success
     }
 
+    /// Returns the next entry from the iterator, or `NotFound`/`Unavail` if exhausted.
+    /// Note: This type is not `std::iter::Iterator` (returns `Response<T>`, not `Option<T>`).
+    #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Response<T> {
         let response = match self.items {
             Some(ref mut items) => match items.get(self.index) {
@@ -98,7 +131,7 @@ impl<T: Clone> Iterator<T> {
         };
         self.index += 1;
 
-        return response;
+        response
     }
 
     pub fn previous(&mut self) {
@@ -131,10 +164,15 @@ impl CBuffer {
         }
     }
 
+    /// # Safety
+    /// - `start` must point to valid writable memory of at least `len` bytes
     pub unsafe fn clear(&mut self) {
         libc::memset(self.start, 0, self.len);
     }
 
+    /// # Safety
+    /// - `pos` must point to valid writable memory within the buffer bounds
+    /// - `string` must not contain interior NUL bytes
     pub unsafe fn write_str(&mut self, string: &str) -> io::Result<*mut libc::c_char> {
         // Capture start address
         let str_start = self.pos;
@@ -158,6 +196,9 @@ impl CBuffer {
         Ok(str_start as *mut libc::c_char)
     }
 
+    /// # Safety
+    /// - `pos` must point to valid writable memory within the buffer bounds
+    /// - all strings in `strings` must not contain interior NUL bytes
     pub unsafe fn write_strs<S: AsRef<str>>(
         &mut self,
         strings: &[S],
@@ -179,6 +220,8 @@ impl CBuffer {
         Ok(vec_start)
     }
 
+    /// # Safety
+    /// - `pos` must point to valid writable memory within the buffer bounds
     pub unsafe fn reserve(&mut self, len: isize) -> io::Result<*mut libc::c_char> {
         let start = self.pos;
 
@@ -188,7 +231,7 @@ impl CBuffer {
         }
 
         // Reserve space
-        self.pos = self.pos.offset(len as isize);
+        self.pos = self.pos.offset(len);
         self.free -= len as usize;
 
         Ok(start as *mut libc::c_char)

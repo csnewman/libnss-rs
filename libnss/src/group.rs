@@ -1,4 +1,4 @@
-use crate::interop::{CBuffer, Response, ToC};
+use crate::interop::{CBuffer, Response, ResponseResult, ToC};
 
 #[derive(Clone)]
 pub struct Group {
@@ -24,6 +24,14 @@ pub trait GroupHooks {
     fn get_entry_by_gid(gid: libc::gid_t) -> Response<Group>;
 
     fn get_entry_by_name(name: String) -> Response<Group>;
+}
+
+pub trait GroupHooksResult {
+    fn get_all_entries() -> ResponseResult<Vec<Group>>;
+
+    fn get_entry_by_gid(gid: libc::gid_t) -> ResponseResult<Group>;
+
+    fn get_entry_by_name(name: String) -> ResponseResult<Group>;
 }
 
 #[repr(C)]
