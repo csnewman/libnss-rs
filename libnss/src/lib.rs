@@ -9,5 +9,5 @@ pub mod shadow;
 #[doc(hidden)]
 pub mod _macro_internal {
     pub use lazy_static::lazy_static;
-    pub use paste::paste;
+    pub use pastey::paste;
 }
