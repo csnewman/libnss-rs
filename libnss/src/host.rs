@@ -275,7 +275,12 @@ macro_rules! libnss_host_hooks {
                                 *h_errnop = Herrno::NetDbSuccess as i32
                             }
                             NssStatus::TryAgain => {
-                                *h_errnop = Herrno::TryAgain as i32
+                                // glibc only retries with a bigger buffer on ERANGE + NETDB_INTERNAL
+                                *h_errnop = if *errnop == libc::ERANGE {
+                                    Herrno::NetDbInternal as i32
+                                } else {
+                                    Herrno::TryAgain as i32
+                                }
                             }
                             NssStatus::Unavail => {
                                 *h_errnop = Herrno::NoRecovery as i32
